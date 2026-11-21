@@ -27,7 +27,7 @@ function ProductImage({ product }) {
   return <img src={product.image} alt={product.name} loading="lazy" className={loaded ? 'loaded' : ''} onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
 }
 
-function ProductCard({ p, onAdd, onQuick, wished, onWish }) {
+function ProductCard({ p, onAdd, onQuick, wished, onWish, onCompare, comparing }) {
   return (
     <article className="card">
       <div className="card-image" onClick={() => onQuick(p)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onQuick(p) }} aria-label={`Quick view ${p.name}`}>
@@ -44,6 +44,7 @@ function ProductCard({ p, onAdd, onQuick, wished, onWish }) {
         <button type="button" className="btn-lime btn-block" onClick={() => onAdd(p)}>
           {p.options ? 'Choose options' : 'Add to Bag'}
         </button>
+        <button type="button" className={comparing ? 'btn-compare active' : 'btn-compare'} onClick={() => onCompare(p.id)}>{comparing ? '✓ Comparing' : '⇄ Compare'}</button>
       </div>
     </article>
   )
@@ -55,7 +56,9 @@ export default function App() {
   const [tab, setTab] = useState('Trending')
   const [shopBy, setShopBy] = useState('lifestyle')
   const [query, setQuery] = useState('')
-  const [cart, setCart] = useState({})
+  const [cart, setCart] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('urban-platter-cart') || '{}') } catch { return {} }
+  })
   const [cartOpen, setCartOpen] = useState(false)
   const [openFaq, setOpenFaq] = useState(0)
   const [teaCups, setTeaCups] = useState(3)
@@ -69,7 +72,18 @@ export default function App() {
   const [quickQty, setQuickQty] = useState(1)
   const [toast, setToast] = useState(null)
   const toastTimer = useRef(null)
-  const [wishlist, setWishlist] = useState([])
+  const [wishlist, setWishlist] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('urban-platter-wishlist') || '[]') } catch { return [] }
+  })
+  const [showWishlist, setShowWishlist] = useState(false)
+  const [recently, setRecently] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('urban-platter-recently') || '[]') } catch { return [] }
+  })
+  const [compare, setCompare] = useState([])
+  const [showCompare, setShowCompare] = useState(false)
+  const [giftWrap, setGiftWrap] = useState(() => {
+    try { return localStorage.getItem('urban-platter-wrap') || 'none' } catch { return 'none' }
+  })
   const [reviewIndex, setReviewIndex] = useState(0)
 
   useEffect(() => {
@@ -112,6 +126,10 @@ export default function App() {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+  useEffect(() => { try { localStorage.setItem('urban-platter-cart', JSON.stringify(cart)) } catch {} }, [cart])
+  useEffect(() => { try { localStorage.setItem('urban-platter-wishlist', JSON.stringify(wishlist)) } catch {} }, [wishlist])
+  useEffect(() => { try { localStorage.setItem('urban-platter-recently', JSON.stringify(recently)) } catch {} }, [recently])
+  useEffect(() => { try { localStorage.setItem('urban-platter-wrap', giftWrap) } catch {} }, [giftWrap])
   useEffect(() => {
     const els = document.querySelectorAll('.reveal')
     const io = new IntersectionObserver((entries) => {
@@ -128,6 +146,9 @@ export default function App() {
     ? allProducts.filter((p) => (p.name + ' ' + p.desc).toLowerCase().includes(query.trim().toLowerCase()))
     : null
 
+  const wishlistProducts = wishlist.map((id) => allProducts.find((p) => p.id === id)).filter(Boolean)
+  const recentlyProducts = recently.map((id) => allProducts.find((p) => p.id === id)).filter(Boolean)
+  const compareProducts = compare.map((id) => allProducts.find((p) => p.id === id)).filter(Boolean)
   const cartItems = Object.entries(cart)
     .map(([id, qty]) => ({ product: allProducts.find((p) => p.id === id), qty }))
     .filter((x) => x.product)
@@ -141,7 +162,23 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), 2600)
   }
   function toggleWish(id) { setWishlist((w) => (w.includes(id) ? w.filter((x) => x !== id) : [...w, id])) }
-  function openQuick(p) { setQuickView(p); setQuickQty(1) }
+  function openQuick(p) {
+    setQuickView(p); setQuickQty(1)
+    setRecently((r) => [p.id, ...r.filter((x) => x !== p.id)].slice(0, 6))
+  }
+  function toggleCompare(id) {
+    setCompare((c) => {
+      if (c.includes(id)) return c.filter((x) => x !== id)
+      if (c.length >= 2) { setToast('Compare holds two products — remove one first'); if (toastTimer.current) clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(null), 2600); return c }
+      return [...c, id]
+    })
+  }
+  function checkoutToast() {
+    setCartOpen(false)
+    setToast('Checkout is a design preview — no payment was taken')
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2600)
+  }
   function setQty(id, qty) {
     setCart((c) => { const n = { ...c }; if (qty <= 0) delete n[id]; else n[id] = qty; return n })
   }
@@ -166,7 +203,7 @@ export default function App() {
             <span aria-hidden="true">⌕</span>
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search for products" aria-label="Search for products" />
           </label>
-          <span className="wish-count" title="Wishlist">♥ {wishlist.length}</span>
+          <button type="button" className={showWishlist ? 'wish-count active' : 'wish-count'} title="View your wishlist" onClick={() => setShowWishlist((v) => !v)}>♥ {wishlist.length}</button>
           <button className="bag" onClick={() => setCartOpen(true)} type="button"><CartIcon /> Bag {cartCount > 0 && <span className="count-badge">{cartCount}</span>}</button>
         </div>
         <nav className="nav" aria-label="Primary">
@@ -181,7 +218,7 @@ export default function App() {
       {searched && (
         <section className="search-results">
           <h2>Search results for “{query}” — {searched.length} found</h2>
-          <div className="grid">{searched.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} />)}</div>
+          <div className="grid">{searched.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} onCompare={toggleCompare} comparing={compare.includes(p.id)} />)}</div>
           <button type="button" className="btn-ghost" onClick={() => setQuery('')}>Clear search</button>
         </section>
       )}
@@ -229,7 +266,18 @@ export default function App() {
             ))}
           </div>
           {tab === 'Trending' ? (
-            <div className="grid">{TRENDING.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} />)}</div>
+            showWishlist ? (
+              <>
+                <div className="wishlist-banner">♥ Your wishlist — {wishlist.length} saved <button type="button" onClick={() => setShowWishlist(false)}>Show all products</button></div>
+                {wishlistProducts.length === 0 ? (
+                  <p className="empty">Your wishlist is empty. Tap the heart on any product to save it here.</p>
+                ) : (
+                  <div className="grid">{wishlistProducts.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} onCompare={toggleCompare} comparing={compare.includes(p.id)} />)}</div>
+                )}
+              </>
+            ) : (
+              <div className="grid">{TRENDING.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} onCompare={toggleCompare} comparing={compare.includes(p.id)} />)}</div>
+            )
           ) : (
             <p className="empty">Products under “{tab}” weren’t shown on the home page on first load, so they’re not listed here — no products invented.</p>
           )}
@@ -281,8 +329,16 @@ export default function App() {
         <section className="section reveal">
           <p className="eyebrow">Shoppable Videos</p>
           <h2>SHOP THE BEST</h2>
-          <div className="grid grid-3">{SHOP_BEST.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} />)}</div>
+          <div className="grid grid-3">{SHOP_BEST.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} onCompare={toggleCompare} comparing={compare.includes(p.id)} />)}</div>
         </section>
+
+        {recentlyProducts.length > 0 && (
+          <section className="section">
+            <p className="eyebrow">Picked Up Where You Left Off</p>
+            <h2>RECENTLY VIEWED</h2>
+            <div className="grid">{recentlyProducts.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} onCompare={toggleCompare} comparing={compare.includes(p.id)} />)}</div>
+          </section>
+        )}
 
         <section className="section reveal">
           <h2>SHOP BY</h2>
@@ -380,7 +436,16 @@ export default function App() {
                 <p className="total-line grand"><span>Total</span><span>{inr(subtotal - discount)}</span></p>
                 <p className="fine">{subtotal >= 500 ? 'Free shipping unlocked (above Rs. 500).' : `Add ${inr(500 - subtotal)} more for free shipping.`}</p>
                 <div className="ship-progress" aria-hidden="true"><div style={{ width: `${Math.min(subtotal / 500, 1) * 100}%` }} /></div>
-                <button type="button" className="btn-lime btn-block" onClick={() => setCartOpen(false)}>Proceed to Checkout →</button>
+                <div className="wrap-picker">
+                  <p className="wrap-title">Gift wrap {giftWrap !== 'none' && <span>· {giftWrap === 'frosted' ? 'Frosted Glass' : giftWrap === 'navy' ? 'Deep Navy' : 'Steel Blue'}</span>}</p>
+                  <div className="wrap-swatches">
+                    <button type="button" className={giftWrap === 'none' ? 'wrap-swatch active' : 'wrap-swatch'} onClick={() => setGiftWrap('none')} aria-label="No gift wrap">✕<span>No wrap</span></button>
+                    <button type="button" className={giftWrap === 'frosted' ? 'wrap-swatch active' : 'wrap-swatch'} onClick={() => setGiftWrap('frosted')} aria-label="Frosted Glass wrap"><span className="swatch frosted" /><span>Frosted Glass</span></button>
+                    <button type="button" className={giftWrap === 'navy' ? 'wrap-swatch active' : 'wrap-swatch'} onClick={() => setGiftWrap('navy')} aria-label="Deep Navy wrap"><span className="swatch navy" /><span>Deep Navy</span></button>
+                    <button type="button" className={giftWrap === 'steel' ? 'wrap-swatch active' : 'wrap-swatch'} onClick={() => setGiftWrap('steel')} aria-label="Steel Blue wrap"><span className="swatch steel" /><span>Steel Blue</span></button>
+                  </div>
+                </div>
+                <button type="button" className="btn-lime btn-block checkout-btn" onClick={checkoutToast}>Proceed to Checkout →</button>
               </>
             )}
           </aside>
@@ -397,6 +462,36 @@ export default function App() {
       )}
       {toast && (
         <div className="toast" role="status">✓ {toast}</div>
+      )}
+      {compareProducts.length > 0 && (
+        <div className="compare-bar" role="status">
+          <span>⇄ Compare ({compareProducts.length}/2)</span>
+          <span className="compare-names">{compareProducts.map((p) => p.name.split(',')[0]).join(' vs ')}</span>
+          {compareProducts.length === 2 && <button type="button" onClick={() => setShowCompare(true)}>View comparison →</button>}
+          <button type="button" className="compare-clear" onClick={() => setCompare([])} aria-label="Clear comparison">✕</button>
+        </div>
+      )}
+      {showCompare && compareProducts.length === 2 && (
+        <div className="modal-backdrop" onClick={() => setShowCompare(false)}>
+          <div className="compare-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Compare products">
+            <button type="button" className="modal-close" onClick={() => setShowCompare(false)} aria-label="Close comparison">✕</button>
+            <h3>COMPARE</h3>
+            <div className="compare-cols">
+              {compareProducts.map((p) => (
+                <div className="compare-col" key={p.id}>
+                  <div className="compare-image"><ProductImage product={p} /></div>
+                  <h4>{p.name}</h4>
+                  <p className="desc">{p.desc}</p>
+                  <p className="price">{p.fromPrice ? 'From ' : ''}{inr(p.price)}{p.mrp && <s>{inr(p.mrp)}</s>}</p>
+                  <p className="compare-row"><span>Discount</span><strong>{p.off || '—'}</strong></p>
+                  <p className="compare-row"><span>Rating</span><strong>{p.rating ? `★ ${p.rating} (${p.reviews})` : '0 Reviews'}</strong></p>
+                  <p className="compare-row"><span>Bought in 30 days</span><strong>{p.bought ? `${p.bought}` : '—'}</strong></p>
+                  <button type="button" className="btn-lime btn-block" onClick={() => { addToCart(p, 1); setShowCompare(false) }}>Add to Bag · {inr(p.price)}</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
       {quickView && (
         <div className="modal-backdrop" onClick={() => setQuickView(null)}>
