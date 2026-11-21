@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PRODUCTS, NAV, GROUPS, TOTAL_PRODUCTS, PRICE_RANGE, inr } from './data/products.js'
 
 const SORTS = [
   'Featured', 'Best selling', 'Price, low to high', 'Price, high to low',
-  'Alphabetically, A-Z', 'Alphabetically, Z-A',
+  'Alphabetically, A-Z', 'Alphabetically, Z-A', 'Discount, high to low', 'Top rated',
 ]
 
 function initials(name) {
@@ -13,8 +13,46 @@ function initials(name) {
 
 function ProductImage({ product }) {
   const [failed, setFailed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
   if (failed || !product.image) return <span className="monogram">{initials(product.name)}</span>
-  return <img src={product.image} alt={product.name} loading="lazy" onError={() => setFailed(true)} />
+  return <img src={product.image} alt={product.name} loading="lazy" className={loaded ? 'loaded' : ''} onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
+}
+
+function discountPct(p) {
+  const m = p.off ? p.off.match(/(\d+)/) : null
+  return m ? Number(m[1]) : 0
+}
+
+function ProductCard({ p, onAdd, onQuick, wished, onWish, notified, onNotify }) {
+  return (
+    <article className="card">
+      <div className="card-image" onClick={() => onQuick(p)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onQuick(p) }} aria-label={`Quick view ${p.name}`}>
+        <ProductImage product={p} />
+        <span className="card-group">{p.group}</span>
+        {p.off && <span className="badge">{p.off}</span>}
+        {p.arrivingSoon && <span className="badge soon">Arriving soon</span>}
+        <button type="button" className={wished ? 'wish active' : 'wish'} aria-label={wished ? `Remove ${p.name} from wishlist` : `Save ${p.name} to wishlist`} onClick={(e) => { e.stopPropagation(); onWish(p.id) }}>{wished ? '♥' : '♡'}</button>
+      </div>
+      <div className="card-body">
+        <h3>{p.name}</h3>
+        <p className="desc">{p.desc}</p>
+        {p.rating && <p className="rating">★ {p.rating} ({p.reviews})</p>}
+        <p className="price">
+          {p.fromPrice ? 'From ' : ''}{inr(p.price)}
+          {p.mrp && <s>{inr(p.mrp)}</s>}
+        </p>
+        {p.arrivingSoon ? (
+          <button type="button" className="btn-secondary" onClick={() => onNotify(p.id)}>
+            {notified ? 'We’ll notify you ✓' : 'Notify Me'}
+          </button>
+        ) : (
+          <button type="button" className="btn-primary btn-block" onClick={() => onAdd(p)}>
+            {p.options ? 'Choose options' : 'Add to cart'}
+          </button>
+        )}
+      </div>
+    </article>
+  )
 }
 
 export default function App() {
@@ -26,6 +64,19 @@ export default function App() {
   const [notified, setNotified] = useState({})
   const [email, setEmail] = useState('')
   const [subscribed, setSubscribed] = useState(false)
+  const [quickView, setQuickView] = useState(null)
+  const [quickQty, setQuickQty] = useState(1)
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
+  const [wishlist, setWishlist] = useState([])
+  const [showTop, setShowTop] = useState(false)
+  const progressRef = useRef(null)
+  const [countdown, setCountdown] = useState({ h: 0, m: 0, s: 0 })
+  const [maxPrice, setMaxPrice] = useState(1600)
+  const [discountOnly, setDiscountOnly] = useState(false)
+  const [ratedOnly, setRatedOnly] = useState(false)
+  const [inStockOnly, setInStockOnly] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(12)
   useEffect(() => {
     const els = document.querySelectorAll('.reveal')
     const io = new IntersectionObserver((entries) => {
@@ -34,20 +85,59 @@ export default function App() {
     els.forEach((el) => io.observe(el))
     return () => io.disconnect()
   }, [])
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date()
+      const end = new Date(now)
+      end.setHours(24, 0, 0, 0)
+      const diff = Math.max(0, end - now)
+      setCountdown({ h: Math.floor(diff / 3600000), m: Math.floor((diff % 3600000) / 60000), s: Math.floor((diff % 60000) / 1000) })
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [])
+  useEffect(() => {
+    let ticking = false
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        const el = document.documentElement
+        const max = el.scrollHeight - el.clientHeight
+        const pct = max > 0 ? Math.min((el.scrollTop / max) * 100, 100) : 0
+        if (progressRef.current) progressRef.current.style.width = `${pct}%`
+        setShowTop(el.scrollTop > 600)
+        ticking = false
+      })
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+  useEffect(() => { setVisibleCount(12) }, [query, group, sort, maxPrice, discountOnly, ratedOnly, inStockOnly])
 
   const filtered = useMemo(() => {
     let list = PRODUCTS.filter((p) => {
       const q = query.trim().toLowerCase()
       const matchesQuery = !q || (p.name + ' ' + p.desc).toLowerCase().includes(q)
       const matchesGroup = group === 'All' || p.group === group
-      return matchesQuery && matchesGroup
+      const matchesPrice = p.price <= maxPrice
+      const matchesDiscount = !discountOnly || discountPct(p) > 0
+      const matchesRated = !ratedOnly || (p.rating && p.rating >= 4)
+      const matchesStock = !inStockOnly || !p.arrivingSoon
+      return matchesQuery && matchesGroup && matchesPrice && matchesDiscount && matchesRated && matchesStock
     })
     if (sort === 'Price, low to high') list = [...list].sort((a, b) => a.price - b.price)
     if (sort === 'Price, high to low') list = [...list].sort((a, b) => b.price - a.price)
     if (sort === 'Alphabetically, A-Z') list = [...list].sort((a, b) => a.name.localeCompare(b.name))
     if (sort === 'Alphabetically, Z-A') list = [...list].sort((a, b) => b.name.localeCompare(a.name))
+    if (sort === 'Discount, high to low') list = [...list].sort((a, b) => discountPct(b) - discountPct(a))
+    if (sort === 'Top rated') list = [...list].sort((a, b) => (b.rating || 0) - (a.rating || 0))
     return list
-  }, [query, group, sort])
+  }, [query, group, sort, maxPrice, discountOnly, ratedOnly, inStockOnly])
+
+  const visible = filtered.slice(0, visibleCount)
 
   const cartItems = Object.entries(cart)
     .map(([id, qty]) => ({ product: PRODUCTS.find((p) => p.id === Number(id)), qty }))
@@ -56,9 +146,14 @@ export default function App() {
   const subtotal = cartItems.reduce((s, x) => s + x.product.price * x.qty, 0)
   const discount = subtotal >= 2500 ? Math.round(subtotal * 0.1) : 0
 
-  function addToCart(p) {
-    setCart((c) => ({ ...c, [p.id]: (c[p.id] || 0) + 1 }))
+  function addToCart(p, qty = 1) {
+    setCart((c) => ({ ...c, [p.id]: (c[p.id] || 0) + qty }))
+    setToast(`Added ${p.name} to your bag`)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2600)
   }
+  function toggleWish(id) { setWishlist((w) => (w.includes(id) ? w.filter((x) => x !== id) : [...w, id])) }
+  function openQuick(p) { setQuickView(p); setQuickQty(1) }
   function setQty(id, qty) {
     setCart((c) => {
       const next = { ...c }
@@ -70,7 +165,8 @@ export default function App() {
 
   return (
     <div className="page">
-      <div className="promo">Get 10% OFF on orders above ₹2,500/-</div>
+      <div className="scroll-progress" aria-hidden="true"><div ref={progressRef} /></div>
+      <div className="promo">Get 10% OFF on orders above ₹2,500/- &nbsp;·&nbsp; Ends in {String(countdown.h).padStart(2, '0')}:{String(countdown.m).padStart(2, '0')}:{String(countdown.s).padStart(2, '0')}</div>
 
       <header className="header">
         <div className="header-inner">
@@ -79,6 +175,7 @@ export default function App() {
             <span aria-hidden="true">⌕</span>
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search for" aria-label="Search for products" />
           </label>
+          <span className="wish-count" title="Wishlist">♥ {wishlist.length}</span>
           <button className="bag" onClick={() => setCartOpen(true)} type="button">
             Bag {cartCount > 0 ? `(${cartCount})` : ''}
           </button>
@@ -125,12 +222,19 @@ export default function App() {
           <div><strong>1,753 products</strong><span>Nuts, seeds, flours, snacks &amp; more</span></div>
         </section>
 
+        <div className="marquee" aria-hidden="true">
+          <div className="marquee-track">
+            <span>Free shipping above ₹500 ✦ 10% off above ₹2,500 ✦ Simply Good Food ✦ 1,753 products ✦&nbsp;</span>
+            <span>Free shipping above ₹500 ✦ 10% off above ₹2,500 ✦ Simply Good Food ✦ 1,753 products ✦&nbsp;</span>
+          </div>
+        </div>
+
         <section id="products" className="collection reveal">
           <div className="collection-head">
             <div>
               <p className="eyebrow">The Collection</p>
               <h2>All Products</h2>
-              <p className="count">Showing {filtered.length} of {TOTAL_PRODUCTS.toLocaleString('en-IN')} products</p>
+              <p className="count">Showing {visible.length} of {filtered.length} products · {TOTAL_PRODUCTS.toLocaleString('en-IN')} in the full collection</p>
             </div>
             <label className="sort">
               Sort by
@@ -147,41 +251,36 @@ export default function App() {
               </button>
             ))}
           </div>
+          <div className="filters">
+            <label className="price-filter">
+              <span>Up to {inr(maxPrice)}</span>
+              <span className="slider-wrap">
+                <span className="slider-bubble" style={{ left: `${Math.min(Math.max((maxPrice / 1600) * 100, 9), 91)}%` }}>{inr(maxPrice)}</span>
+                <input type="range" min="0" max="1600" step="50" value={maxPrice} onChange={(e) => setMaxPrice(Number(e.target.value))} aria-label="Maximum price" />
+              </span>
+              <span className="slider-ends"><span>{inr(0)}</span><span>{inr(1600)}</span></span>
+            </label>
+            <button type="button" className={discountOnly ? 'chip active' : 'chip'} onClick={() => setDiscountOnly((v) => !v)}>Discounted</button>
+            <button type="button" className={ratedOnly ? 'chip active' : 'chip'} onClick={() => setRatedOnly((v) => !v)}>4★ &amp; above</button>
+            <button type="button" className={inStockOnly ? 'chip active' : 'chip'} onClick={() => setInStockOnly((v) => !v)}>In stock only</button>
+          </div>
           <p className="price-range">Price: {inr(PRICE_RANGE.min)} – {inr(PRICE_RANGE.max)}</p>
 
           {filtered.length === 0 ? (
-            <p className="empty">No products match “{query}” in {group}. Try a different search.</p>
+            <p className="empty">No products match “{query}” in {group}. Try a different search or clear the filters.</p>
           ) : (
-            <div className="grid">
-              {filtered.map((p) => (
-                <article className="card" key={p.id}>
-                  <div className="card-image">
-                    <ProductImage product={p} />
-                    <span className="card-group">{p.group}</span>
-                    {p.off && <span className="badge">{p.off}</span>}
-                    {p.arrivingSoon && <span className="badge soon">Arriving soon</span>}
-                  </div>
-                  <div className="card-body">
-                    <h3>{p.name}</h3>
-                    <p className="desc">{p.desc}</p>
-                    {p.rating && <p className="rating">★ {p.rating} ({p.reviews})</p>}
-                    <p className="price">
-                      {p.fromPrice ? 'From ' : ''}{inr(p.price)}
-                      {p.mrp && <s>{inr(p.mrp)}</s>}
-                    </p>
-                    {p.arrivingSoon ? (
-                      <button type="button" className="btn-secondary" onClick={() => setNotified((n) => ({ ...n, [p.id]: true }))}>
-                        {notified[p.id] ? 'We’ll notify you ✓' : 'Notify Me'}
-                      </button>
-                    ) : (
-                      <button type="button" className="btn-primary btn-block" onClick={() => addToCart(p)}>
-                        {p.options ? 'Choose options' : 'Add to cart'}
-                      </button>
-                    )}
-                  </div>
-                </article>
-              ))}
-            </div>
+            <>
+              <div className="grid">
+                {visible.map((p) => (
+                  <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} notified={notified[p.id]} onNotify={(id) => setNotified((n) => ({ ...n, [id]: true }))} />
+                ))}
+              </div>
+              {visibleCount < filtered.length && (
+                <button type="button" className="load-more" onClick={() => setVisibleCount((c) => c + 12)}>
+                  Load more ({filtered.length - visibleCount} remaining)
+                </button>
+              )}
+            </>
           )}
           <p className="source-note">
             First 30 products in Featured order, as shown live on urbanplatter.com/collections/all on 21 Nov 2026.
@@ -241,9 +340,51 @@ export default function App() {
                 <p className="total-line"><span>10% off (orders above ₹2,500)</span><span>{discount ? '− ' + inr(discount) : '—'}</span></p>
                 <p className="total-line grand"><span>Total</span><span>{inr(subtotal - discount)}</span></p>
                 {subtotal < 2500 && <p className="promo-hint">Add {inr(2500 - subtotal)} more to get 10% off.</p>}
+                <p className="ship-note">{subtotal >= 500 ? 'Free shipping unlocked (above Rs. 500).' : `Add ${inr(500 - subtotal)} more for free shipping.`}</p>
+                <div className="ship-progress" aria-hidden="true"><div style={{ width: `${Math.min(subtotal / 500, 1) * 100}%` }} /></div>
               </>
             )}
           </aside>
+        </div>
+      )}
+
+      {cartCount > 0 && (
+        <button type="button" className="float-bag" onClick={() => setCartOpen(true)} aria-label={`Open your bag, ${cartCount} items, total ${inr(subtotal - discount)}`}>
+          🛍 Bag ({cartCount}) · {inr(subtotal - discount)}
+        </button>
+      )}
+      {showTop && (
+        <button type="button" className="back-top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="Back to top">↑</button>
+      )}
+      {toast && (
+        <div className="toast" role="status">✓ {toast}</div>
+      )}
+      {quickView && (
+        <div className="modal-backdrop" onClick={() => setQuickView(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Quick view ${quickView.name}`}>
+            <button type="button" className="modal-close" onClick={() => setQuickView(null)} aria-label="Close quick view">✕</button>
+            <div className="modal-image"><ProductImage product={quickView} /></div>
+            <div className="modal-body">
+              <h3>{quickView.name}</h3>
+              <p className="desc">{quickView.desc}</p>
+              {quickView.rating ? <p className="rating">★ {quickView.rating} ({quickView.reviews})</p> : <p className="rating muted">0 Reviews</p>}
+              <p className="price">{quickView.fromPrice ? 'From ' : ''}{inr(quickView.price)}{quickView.mrp && <s>{inr(quickView.mrp)}</s>}</p>
+              {quickView.arrivingSoon ? (
+                <button type="button" className="btn-secondary" onClick={() => { setNotified((n) => ({ ...n, [quickView.id]: true })); setQuickView(null) }}>
+                  {notified[quickView.id] ? 'We’ll notify you ✓' : 'Notify Me'}
+                </button>
+              ) : (
+                <>
+                  <div className="qty modal-qty">
+                    <button type="button" onClick={() => setQuickQty((q) => Math.max(1, q - 1))} aria-label="Decrease quantity">−</button>
+                    <span>{quickQty}</span>
+                    <button type="button" onClick={() => setQuickQty((q) => q + 1)} aria-label="Increase quantity">+</button>
+                  </div>
+                  <button type="button" className="btn-primary btn-block" onClick={() => { addToCart(quickView, quickQty); setQuickView(null) }}>Add {quickQty} to cart · {inr(quickView.price * quickQty)}</button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
