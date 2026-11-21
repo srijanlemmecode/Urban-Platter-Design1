@@ -110,7 +110,10 @@ export default function App() {
 
       <main>
         <section className="hero" aria-label="Featured">
-          <img className="hero-image" src={hero.image} alt="" />
+          <picture>
+            <source media="(max-width: 700px)" srcSet={hero.mobileImage} />
+            <img className="hero-image" src={hero.image} alt="" />
+          </picture>
           <div className="hero-content">
           <p className="hero-tag">{hero.tag}</p>
           <h1>{hero.title}</h1>
