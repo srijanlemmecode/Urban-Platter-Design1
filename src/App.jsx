@@ -59,7 +59,9 @@ export default function App() {
   const [query, setQuery] = useState('')
   const [group, setGroup] = useState('All')
   const [sort, setSort] = useState('Featured')
-  const [cart, setCart] = useState({})
+  const [cart, setCart] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('urban-platter-cart') || '{}') } catch { return {} }
+  })
   const [cartOpen, setCartOpen] = useState(false)
   const [notified, setNotified] = useState({})
   const [email, setEmail] = useState('')
@@ -68,7 +70,10 @@ export default function App() {
   const [quickQty, setQuickQty] = useState(1)
   const [toast, setToast] = useState(null)
   const toastTimer = useRef(null)
-  const [wishlist, setWishlist] = useState([])
+  const [wishlist, setWishlist] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('urban-platter-wishlist') || '[]') } catch { return [] }
+  })
+  const [showWishlist, setShowWishlist] = useState(false)
   const [showTop, setShowTop] = useState(false)
   const progressRef = useRef(null)
   const [countdown, setCountdown] = useState({ h: 0, m: 0, s: 0 })
@@ -116,6 +121,8 @@ export default function App() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
   useEffect(() => { setVisibleCount(12) }, [query, group, sort, maxPrice, discountOnly, ratedOnly, inStockOnly])
+  useEffect(() => { try { localStorage.setItem('urban-platter-cart', JSON.stringify(cart)) } catch {} }, [cart])
+  useEffect(() => { try { localStorage.setItem('urban-platter-wishlist', JSON.stringify(wishlist)) } catch {} }, [wishlist])
 
   const filtered = useMemo(() => {
     let list = PRODUCTS.filter((p) => {
@@ -126,16 +133,18 @@ export default function App() {
       const matchesDiscount = !discountOnly || discountPct(p) > 0
       const matchesRated = !ratedOnly || (p.rating && p.rating >= 4)
       const matchesStock = !inStockOnly || !p.arrivingSoon
-      return matchesQuery && matchesGroup && matchesPrice && matchesDiscount && matchesRated && matchesStock
+      const matchesWishlist = !showWishlist || wishlist.includes(p.id)
+      return matchesQuery && matchesGroup && matchesPrice && matchesDiscount && matchesRated && matchesStock && matchesWishlist
     })
     if (sort === 'Price, low to high') list = [...list].sort((a, b) => a.price - b.price)
     if (sort === 'Price, high to low') list = [...list].sort((a, b) => b.price - a.price)
     if (sort === 'Alphabetically, A-Z') list = [...list].sort((a, b) => a.name.localeCompare(b.name))
     if (sort === 'Alphabetically, Z-A') list = [...list].sort((a, b) => b.name.localeCompare(a.name))
+    if (sort === 'Best selling') list = [...list].sort((a, b) => (b.reviews || 0) - (a.reviews || 0))
     if (sort === 'Discount, high to low') list = [...list].sort((a, b) => discountPct(b) - discountPct(a))
     if (sort === 'Top rated') list = [...list].sort((a, b) => (b.rating || 0) - (a.rating || 0))
     return list
-  }, [query, group, sort, maxPrice, discountOnly, ratedOnly, inStockOnly])
+  }, [query, group, sort, maxPrice, discountOnly, ratedOnly, inStockOnly, showWishlist, wishlist])
 
   const visible = filtered.slice(0, visibleCount)
 
@@ -153,6 +162,8 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), 2600)
   }
   function toggleWish(id) { setWishlist((w) => (w.includes(id) ? w.filter((x) => x !== id) : [...w, id])) }
+  function clearFilters() { setQuery(''); setGroup('All'); setMaxPrice(1600); setDiscountOnly(false); setRatedOnly(false); setInStockOnly(false) }
+  const filtersActive = query.trim() !== '' || group !== 'All' || maxPrice < 1600 || discountOnly || ratedOnly || inStockOnly
   function openQuick(p) { setQuickView(p); setQuickQty(1) }
   function setQty(id, qty) {
     setCart((c) => {
@@ -175,7 +186,7 @@ export default function App() {
             <span aria-hidden="true">⌕</span>
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search for" aria-label="Search for products" />
           </label>
-          <span className="wish-count" title="Wishlist">♥ {wishlist.length}</span>
+          <button type="button" className={showWishlist ? 'wish-count active' : 'wish-count'} title="View your wishlist" onClick={() => setShowWishlist((v) => !v)}>♥ {wishlist.length}</button>
           <button className="bag" onClick={() => setCartOpen(true)} type="button">
             Bag {cartCount > 0 ? `(${cartCount})` : ''}
           </button>
@@ -263,11 +274,21 @@ export default function App() {
             <button type="button" className={discountOnly ? 'chip active' : 'chip'} onClick={() => setDiscountOnly((v) => !v)}>Discounted</button>
             <button type="button" className={ratedOnly ? 'chip active' : 'chip'} onClick={() => setRatedOnly((v) => !v)}>4★ &amp; above</button>
             <button type="button" className={inStockOnly ? 'chip active' : 'chip'} onClick={() => setInStockOnly((v) => !v)}>In stock only</button>
+            {filtersActive && <button type="button" className="chip" onClick={clearFilters}>Clear all ✕</button>}
           </div>
           <p className="price-range">Price: {inr(PRICE_RANGE.min)} – {inr(PRICE_RANGE.max)}</p>
 
+          {showWishlist && (
+            <div className="wishlist-banner">
+              <span>♥ Your wishlist — {wishlist.length} saved</span>
+              <button type="button" className="chip" onClick={() => setShowWishlist(false)}>Show all products</button>
+            </div>
+          )}
           {filtered.length === 0 ? (
-            <p className="empty">No products match “{query}” in {group}. Try a different search or clear the filters.</p>
+            <div className="empty">
+              <p>{showWishlist && wishlist.length === 0 ? 'Your wishlist is empty. Tap the heart on any product to save it here.' : `No products match “${query}” in ${group}. Try a different search or clear the filters.`}</p>
+              <button type="button" className="chip" onClick={clearFilters}>Clear all filters</button>
+            </div>
           ) : (
             <>
               <div className="grid">
@@ -342,6 +363,7 @@ export default function App() {
                 {subtotal < 2500 && <p className="promo-hint">Add {inr(2500 - subtotal)} more to get 10% off.</p>}
                 <p className="ship-note">{subtotal >= 500 ? 'Free shipping unlocked (above Rs. 500).' : `Add ${inr(500 - subtotal)} more for free shipping.`}</p>
                 <div className="ship-progress" aria-hidden="true"><div style={{ width: `${Math.min(subtotal / 500, 1) * 100}%` }} /></div>
+                <button type="button" className="btn-primary btn-block checkout-btn" onClick={() => { setCartOpen(false); setToast('Checkout is a design preview — no payment was taken') }}>Proceed to Checkout →</button>
               </>
             )}
           </aside>

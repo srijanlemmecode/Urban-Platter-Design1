@@ -183,7 +183,11 @@ img.loaded { opacity: 1; }
 .wish { position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.9); color: var(--sage); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform .2s ease; z-index: 2; }
 .wish:hover { transform: scale(1.12); }
 .wish.active { color: #c0456b; }
-.wish-count { color: var(--sage); font-weight: 700; font-size: 14px; white-space: nowrap; }
+.wish-count { color: var(--sage); font-weight: 700; font-size: 14px; white-space: nowrap; background: none; border: 0; cursor: pointer; padding: 4px 6px; }
+.wish-count.active { background: var(--sage-light); border-radius: 999px; }
+.checkout-btn { margin-top: 16px; }
+.wishlist-banner { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--sage-light); border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px; margin: 0 0 24px; font-weight: 600; color: var(--sage-dark); }
+.empty .chip { margin-top: 16px; }
 .float-bag { position: fixed; right: 20px; bottom: 20px; z-index: 25; background: var(--sage); color: #fff; border: 0; border-radius: 999px; padding: 13px 20px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 12px 28px rgba(70, 84, 60, 0.35); animation: fadeUp .4s ease both; }
 .back-top { position: fixed; right: 20px; bottom: 84px; z-index: 25; width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--line); background: #fff; color: var(--sage); font-size: 20px; font-weight: 700; cursor: pointer; box-shadow: 0 8px 20px rgba(28, 26, 23, 0.2); animation: fadeIn .3s ease both; }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 40; background: rgba(28, 26, 23, 0.92); color: #f4f1e8; border-radius: 999px; padding: 12px 20px; font-weight: 600; font-size: 14px; box-shadow: 0 12px 28px rgba(28, 26, 23, 0.35); animation: toastIn .3s ease both; white-space: nowrap; max-width: 92vw; overflow: hidden; text-overflow: ellipsis; }
