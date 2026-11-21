@@ -1,10 +1,18 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { HERO_SLIDES, TRENDING, SHOP_BEST, CHINI_BANNER_IMAGE, SHOP_BY_LIFESTYLE, SHOP_BY_CUISINES, REVIEWS, FAQS, NAV, TABS, inr } from './data/home.js'
 
 const TILE_ICONS = {
   'KETO-FRIENDLY': '🥑', 'GUT-FRIENDLY': '🌿', 'JAIN-FRIENDLY': '🌱', 'KID FRIENDLY': '🧒',
   'K-TOWN': '🇰🇷', 'ASIAN FUSION': '🍜', 'MIDDLE EASTERN': '🧆', 'FRENCH BISTRO': '🥐', 'INDIAN FEAST': '🍛',
 }
+
+// Curated collections — only real products from home.js, nothing invented.
+// Set total is the real sum; 10% off already applies in the cart above ₹2,500.
+const COLLECTIONS = [
+  { id: 'morning', name: 'The Morning Ritual', desc: 'Slow mornings, done properly — pour-over coffee, bilona ghee and a daily Brazil nut.', ids: ['t4', 'b2', 'b6'] },
+  { id: 'asian', name: 'The Asian Table', desc: 'Noodles, tofu, chaap and edamame — everything for an Asian-inspired table.', ids: ['t1', 't2', 't5', 't8'] },
+  { id: 'festive', name: 'The Festive Edit', desc: 'Ghee, nuts and natural sweeteners — the generous hamper, ready to gift.', ids: ['b6', 'b2', 't3', 'b4'] },
+]
 
 function initials(name) {
   const words = name.replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean)
@@ -13,16 +21,18 @@ function initials(name) {
 
 function ProductImage({ product }) {
   const [failed, setFailed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
   if (failed || !product.image) return <span className="monogram">{initials(product.name)}</span>
-  return <img src={product.image} alt={product.name} loading="lazy" onError={() => setFailed(true)} />
+  return <img src={product.image} alt={product.name} loading="lazy" className={loaded ? 'loaded' : ''} onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
 }
 
-function ProductCard({ p, onAdd }) {
+function ProductCard({ p, onAdd, onQuick, wished, onWish }) {
   return (
     <article className="card">
-      <div className="card-image">
+      <div className="card-image" onClick={() => onQuick(p)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onQuick(p) }} aria-label={`Quick view ${p.name}`}>
         <ProductImage product={p} />
         {p.off && <span className="badge">{p.off}</span>}
+        <button type="button" className={wished ? 'wish active' : 'wish'} aria-label={wished ? `Remove ${p.name} from wishlist` : `Save ${p.name} to wishlist`} onClick={(e) => { e.stopPropagation(); onWish(p.id) }}>{wished ? '♥' : '♡'}</button>
       </div>
       <div className="card-body">
         <h3>{p.name}</h3>
@@ -44,7 +54,9 @@ export default function App() {
   const [tab, setTab] = useState('Trending')
   const [shopBy, setShopBy] = useState('lifestyle')
   const [query, setQuery] = useState('')
-  const [cart, setCart] = useState({})
+  const [cart, setCart] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('urban-platter-cart') || '{}') } catch { return {} }
+  })
   const [cartOpen, setCartOpen] = useState(false)
   const [openFaq, setOpenFaq] = useState(0)
   const [teaCups, setTeaCups] = useState(3)
@@ -52,12 +64,68 @@ export default function App() {
   const [juice, setJuice] = useState(0)
   const [cola, setCola] = useState(0)
   const [calcDone, setCalcDone] = useState(false)
+  const [quickView, setQuickView] = useState(null)
+  const [quickQty, setQuickQty] = useState(1)
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
+  const [wishlist, setWishlist] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('urban-platter-wishlist') || '[]') } catch { return [] }
+  })
+  const [showTop, setShowTop] = useState(false)
+  const progressRef = useRef(null)
+  const [countdown, setCountdown] = useState({ h: 0, m: 0, s: 0 })
+  const [reviewIndex, setReviewIndex] = useState(0)
+  const [giftBox, setGiftBox] = useState([])
+  const [giftBoxMsg, setGiftBoxMsg] = useState('')
+  const [isGift, setIsGift] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('urban-platter-gift') || '{"isGift":false}').isGift || false } catch { return false }
+  })
+  const [giftMsg, setGiftMsg] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('urban-platter-gift') || '{"isGift":false,"msg":""}').msg || '' } catch { return '' }
+  })
 
   useEffect(() => {
     const t = setInterval(() => setSlide((s) => (s + 1) % HERO_SLIDES.length), 6000)
     return () => clearInterval(t)
   }, [])
   useEffect(() => { setHeroFallback(false) }, [slide])
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date()
+      const end = new Date(now)
+      end.setHours(24, 0, 0, 0)
+      const diff = Math.max(0, end - now)
+      setCountdown({ h: Math.floor(diff / 3600000), m: Math.floor((diff % 3600000) / 60000), s: Math.floor((diff % 60000) / 1000) })
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [])
+  useEffect(() => {
+    const id = setInterval(() => setReviewIndex((i) => (i + 1) % REVIEWS.length), 5000)
+    return () => clearInterval(id)
+  }, [])
+  useEffect(() => {
+    let ticking = false
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        const el = document.documentElement
+        const max = el.scrollHeight - el.clientHeight
+        const pct = max > 0 ? Math.min((el.scrollTop / max) * 100, 100) : 0
+        if (progressRef.current) progressRef.current.style.width = `${pct}%`
+        setShowTop(el.scrollTop > 600)
+        ticking = false
+      })
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+  useEffect(() => { try { localStorage.setItem('urban-platter-cart', JSON.stringify(cart)) } catch {} }, [cart])
+  useEffect(() => { try { localStorage.setItem('urban-platter-wishlist', JSON.stringify(wishlist)) } catch {} }, [wishlist])
+  useEffect(() => { try { localStorage.setItem('urban-platter-gift', JSON.stringify({ isGift, msg: giftMsg })) } catch {} }, [isGift, giftMsg])
   useEffect(() => {
     const els = document.querySelectorAll('.reveal')
     const io = new IntersectionObserver((entries) => {
@@ -80,7 +148,34 @@ export default function App() {
   const cartCount = cartItems.reduce((s, x) => s + x.qty, 0)
   const subtotal = cartItems.reduce((s, x) => s + x.product.price * x.qty, 0)
   const discount = subtotal >= 2500 ? Math.round(subtotal * 0.1) : 0
-  function addToCart(p) { setCart((c) => ({ ...c, [p.id]: (c[p.id] || 0) + 1 })) }
+  function addToCart(p, qty = 1) {
+    setCart((c) => ({ ...c, [p.id]: (c[p.id] || 0) + qty }))
+    setToast(`Added ${p.name} to your bag`)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2600)
+  }
+  function toggleWish(id) { setWishlist((w) => (w.includes(id) ? w.filter((x) => x !== id) : [...w, id])) }
+  function collectionProducts(c) { return c.ids.map((id) => allProducts.find((p) => p.id === id)).filter(Boolean) }
+  function collectionTotal(c) { return collectionProducts(c).reduce((s, p) => s + p.price, 0) }
+  function addSet(c) {
+    collectionProducts(c).forEach((p) => addToCart(p, 1))
+    setToast(`Added ${c.name} set to your bag`)
+  }
+  function toggleGiftPick(id) {
+    setGiftBox((box) => {
+      if (box.includes(id)) return box.filter((x) => x !== id)
+      if (box.length >= 5) return box
+      return [...box, id]
+    })
+  }
+  function giftBoxTotal() { return giftBox.map((id) => allProducts.find((p) => p.id === id)).filter(Boolean).reduce((s, p) => s + p.price, 0) }
+  function addGiftBox() {
+    if (giftBox.length < 3) return
+    giftBox.forEach((id) => { const p = allProducts.find((x) => x.id === id); if (p) addToCart(p, 1) })
+    setToast(`Gift box (${giftBox.length} treats) added to your bag`)
+    setGiftBox([])
+  }
+  function openQuick(p) { setQuickView(p); setQuickQty(1) }
   function setQty(id, qty) {
     setCart((c) => { const n = { ...c }; if (qty <= 0) delete n[id]; else n[id] = qty; return n })
   }
@@ -95,7 +190,8 @@ export default function App() {
 
   return (
     <div className="page">
-      <div className="promo">GET 10% OFF ON ORDERS ABOVE ₹2,500/-</div>
+      <div className="scroll-progress" aria-hidden="true"><div ref={progressRef} /></div>
+      <div className="promo">GET 10% OFF ON ORDERS ABOVE ₹2,500/- &nbsp;·&nbsp; ENDS IN {String(countdown.h).padStart(2, '0')}:{String(countdown.m).padStart(2, '0')}:{String(countdown.s).padStart(2, '0')}</div>
 
       <header className="header">
         <div className="header-inner">
@@ -104,6 +200,7 @@ export default function App() {
             <span aria-hidden="true">⌕</span>
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search for products" aria-label="Search for products" />
           </label>
+          <span className="wish-count" title="Wishlist">♥ {wishlist.length}</span>
           <button className="bag" onClick={() => setCartOpen(true)} type="button">🛍 Bag {cartCount > 0 ? `(${cartCount})` : ''}</button>
         </div>
         <nav className="nav" aria-label="Primary">
@@ -118,7 +215,7 @@ export default function App() {
       {searched && (
         <section className="search-results">
           <h2>Search results for “{query}” — {searched.length} found</h2>
-          <div className="grid">{searched.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} />)}</div>
+          <div className="grid">{searched.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} />)}</div>
           <button type="button" className="btn-ghost" onClick={() => setQuery('')}>Clear search</button>
         </section>
       )}
@@ -143,7 +240,19 @@ export default function App() {
             ))}
             <span className="slide-count">Slide {slide + 1} of 6</span>
           </div>
+          <div className="hero-stats">
+            <span>✦ Free shipping above ₹500</span>
+            <span>✦ 1,753 products</span>
+            <span>✦ 10% off above ₹2,500</span>
+          </div>
         </section>
+
+        <div className="marquee" aria-hidden="true">
+          <div className="marquee-track">
+            <span>Free shipping above ₹500 ✦ 10% off above ₹2,500 ✦ Simply Good Food ✦ 1,753 products ✦&nbsp;</span>
+            <span>Free shipping above ₹500 ✦ 10% off above ₹2,500 ✦ Simply Good Food ✦ 1,753 products ✦&nbsp;</span>
+          </div>
+        </div>
 
         <section id="trending" className="section reveal">
           <p className="eyebrow">Welcome to Urban Platter</p>
@@ -154,13 +263,13 @@ export default function App() {
             ))}
           </div>
           {tab === 'Trending' ? (
-            <div className="grid">{TRENDING.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} />)}</div>
+            <div className="grid">{TRENDING.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} />)}</div>
           ) : (
             <p className="empty">Products under “{tab}” weren’t shown on the home page on first load, so they’re not listed here — no products invented.</p>
           )}
         </section>
 
-        <section className="section reveal chini">
+        <section id="chini" className="section reveal chini">
           <img className="chini-banner" src={CHINI_BANNER_IMAGE} alt="Chini Kam. Mithaas wahi." onError={(e) => { e.currentTarget.style.display = 'none' }} />
           <h2>CHINI KAM. MITHAAS WAHI.</h2>
           <p className="section-sub">That “bas 2 chammach” adds up. See how much sugar your day really holds, and what switching would change.</p>
@@ -206,7 +315,29 @@ export default function App() {
         <section className="section reveal">
           <p className="eyebrow">Shoppable Videos</p>
           <h2>SHOP THE BEST</h2>
-          <div className="grid grid-3">{SHOP_BEST.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} />)}</div>
+          <div className="grid grid-3">{SHOP_BEST.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} />)}</div>
+        </section>
+
+        <section className="section reveal">
+          <p className="eyebrow">Curated Collections</p>
+          <h2>SETS, CHOSEN FOR YOU</h2>
+          <p className="section-sub">Three sets built from products already on this page — one tap adds the whole set to your bag.</p>
+          <div className="collection-grid">
+            {COLLECTIONS.map((c) => (
+              <div className="collection-card" key={c.id}>
+                <div className="collection-thumbs">
+                  {collectionProducts(c).map((p) => (
+                    <div className="collection-thumb" key={p.id} title={p.name}><ProductImage product={p} /></div>
+                  ))}
+                </div>
+                <h3>{c.name}</h3>
+                <p className="desc">{c.desc}</p>
+                <p className="collection-items">{collectionProducts(c).map((p) => p.name.split(',')[0]).join(' · ')}</p>
+                <p className="price">Set total {inr(collectionTotal(c))}{collectionTotal(c) >= 2500 && <span className="fine"> · 10% off applies at checkout</span>}</p>
+                <button type="button" className="btn-lime btn-block" onClick={() => addSet(c)}>Add the Set →</button>
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className="section reveal">
@@ -238,16 +369,82 @@ export default function App() {
           </div>
         </section>
 
+        <section className="section reveal journal">
+          <p className="eyebrow">The Journal</p>
+          <h2>STORIES FROM THE TABLE</h2>
+          <p className="section-sub">Notes on sweetness, superfoods and flavour — from the stories already on this page.</p>
+          <div className="journal-grid">
+            <article className="journal-card">
+              <p className="journal-eyebrow">SWEETNESS</p>
+              <h3>Chini Kam. Mithaas Wahi.</h3>
+              <p><span className="dropcap">T</span>hat “bas 2 chammach” adds up. A spoon here, a glass there — and the year quietly holds kilos of sugar you never counted.</p>
+              <blockquote className="pullquote">“As a vegan this is the best product. Best part is no need to store is refrigerator.” <footer>— TANVI M., Noida</footer></blockquote>
+              <p className="fine">Monk Fruit Sweetener replaces sugar 1:1, with zero calories and no bitter aftertaste.</p>
+              <a href="#chini">Try the Chini Kam calculator →</a>
+            </article>
+            <article className="journal-card">
+              <p className="journal-eyebrow">SUPERFOODS</p>
+              <h3>The Nut Nobody Talks About (But Should)</h3>
+              <p><span className="dropcap">R</span>ich, buttery, and one of nature’s richest sources of selenium — Brazil nuts, a product of Peru, one a day.</p>
+              <blockquote className="pullquote">“These are really good. So are the other flavors.” <footer>— BALARAMDAS KALIYEV, Goa</footer></blockquote>
+              <p className="fine">Brazil Nuts, 1Kg — {inr(3399)} · have 1 daily.</p>
+              <a href="#trending">Shop Brazil Nuts →</a>
+            </article>
+            <article className="journal-card">
+              <p className="journal-eyebrow">FLAVOUR</p>
+              <h3>Three Pastes. Endless Korean Cravings.</h3>
+              <p><span className="dropcap">B</span>ring home the bold, spicy and savoury flavours of Korea — Ssamjang, Gochujang and Doenjang, three pastes for endless cravings.</p>
+              <blockquote className="pullquote">“Cheesy and perfect as a salad dressing.” <footer>— BEVERLEY P., Karnataka</footer></blockquote>
+              <p className="fine">Shop the K-Town collection — Korean pastes, noodles and edamame.</p>
+              <a href="#trending">Shop the K-Town table →</a>
+            </article>
+          </div>
+        </section>
+
+        <section id="giftbox" className="section reveal">
+          <p className="eyebrow">Build Your Own</p>
+          <h2>THE GIFT BOX BUILDER</h2>
+          <p className="section-sub">Pick any 3 to 5 treats, add a note, and send the whole box in one tap. The box itself is on us.</p>
+          <div className="pick-grid">
+            {allProducts.map((p) => {
+              const picked = giftBox.includes(p.id)
+              const full = !picked && giftBox.length >= 5
+              return (
+                <button key={p.id} type="button" className={picked ? 'pick-card picked' : 'pick-card'} disabled={full} onClick={() => toggleGiftPick(p.id)}>
+                  <div className="pick-thumb"><ProductImage product={p} /></div>
+                  <span className="pick-name">{p.name}</span>
+                  <span className="pick-price">{inr(p.price)}</span>
+                  <span className="pick-state">{picked ? '✓ In the box' : full ? 'Box is full' : '+ Add to box'}</span>
+                </button>
+              )
+            })}
+          </div>
+          <div className="giftbox-summary">
+            <div>
+              <p className="giftbox-count">{giftBox.length === 0 ? 'Pick 3 to 5 treats to build your box' : `${giftBox.length} of 5 treats picked`}{giftBox.length >= 3 && ` · Box total ${inr(giftBoxTotal())}`}</p>
+              <label className="giftbox-msg-label">A note for the recipient
+                <textarea value={giftBoxMsg} onChange={(e) => setGiftBoxMsg(e.target.value)} placeholder="Write a short note — it travels with the box…" rows={2} />
+              </label>
+            </div>
+            <button type="button" className="btn-lime" disabled={giftBox.length < 3} onClick={addGiftBox}>
+              {giftBox.length < 3 ? `Pick ${3 - giftBox.length} more treat${3 - giftBox.length === 1 ? '' : 's'}` : `Add Gift Box to Bag · ${inr(giftBoxTotal())}`}
+            </button>
+          </div>
+        </section>
+
         <section className="section reveal">
           <h2>WHAT PEOPLE SAY</h2>
-          <div className="reviews">
-            {REVIEWS.map((r) => (
-              <blockquote key={r.name} className="review">
-                <p className="stars">★★★★★</p>
-                <p>“{r.text}”</p>
-                <footer>{r.name} — {r.place}</footer>
-              </blockquote>
-            ))}
+          <div className="review-carousel">
+            <blockquote className="review" key={REVIEWS[reviewIndex].name}>
+              <p className="stars">★★★★★</p>
+              <p>“{REVIEWS[reviewIndex].text}”</p>
+              <footer>{REVIEWS[reviewIndex].name} — {REVIEWS[reviewIndex].place}</footer>
+            </blockquote>
+            <div className="hero-dots review-dots">
+              {REVIEWS.map((r, i) => (
+                <button key={r.name} type="button" aria-label={`Show review ${i + 1} of ${REVIEWS.length}`} className={i === reviewIndex ? 'dot active' : 'dot'} onClick={() => setReviewIndex(i)} />
+              ))}
+            </div>
           </div>
         </section>
 
@@ -259,6 +456,25 @@ export default function App() {
               {openFaq === i && <p>{f.a}</p>}
             </div>
           ))}
+        </section>
+
+        <section className="section reveal club">
+          <p className="eyebrow">Members Only</p>
+          <h2>THE PLATTER CLUB</h2>
+          <p className="section-sub">Our gold membership — for the ones who come back for the good stuff.</p>
+          <div className="club-grid">
+            <div className="club-card">
+              <p className="club-brand">URBAN PLATTER</p>
+              <p className="club-tier">GOLD</p>
+              <p className="club-member">PLATTER CLUB · MEMBER</p>
+              <p className="club-no">✦ ✦ ✦</p>
+            </div>
+            <div className="club-tiers">
+              <div><h3>Gold</h3><p>Every order earns points · A birthday treat · Members-only sets</p></div>
+              <div><h3>Platinum</h3><p>Free shipping on every order · Early access to new drops · First pick of the Festive Edit</p></div>
+              <button type="button" className="btn-lime" onClick={() => setToast('Welcome to Platter Club — you are on the list')}>Join Platter Club →</button>
+            </div>
+          </div>
         </section>
       </main>
 
@@ -297,10 +513,54 @@ export default function App() {
                 <p className="total-line"><span>10% off (orders above ₹2,500)</span><span>{discount ? '− ' + inr(discount) : '—'}</span></p>
                 <p className="total-line grand"><span>Total</span><span>{inr(subtotal - discount)}</span></p>
                 <p className="fine">{subtotal >= 500 ? 'Free shipping unlocked (above Rs. 500).' : `Add ${inr(500 - subtotal)} more for free shipping.`}</p>
-                <button type="button" className="btn-lime btn-block" onClick={() => setCartOpen(false)}>Proceed to Checkout →</button>
+                <div className="ship-progress" aria-hidden="true"><div style={{ width: `${Math.min(subtotal / 500, 1) * 100}%` }} /></div>
+                <button type="button" className="btn-lime btn-block checkout-btn" onClick={() => { setCartOpen(false); setToast('Checkout is a design preview — no payment was taken') }}>Proceed to Checkout →</button>
+                <div className="gift-section">
+                  <label className="gift-toggle">
+                    <input type="checkbox" checked={isGift} onChange={(e) => setIsGift(e.target.checked)} />
+                    <span>This order is a gift</span>
+                  </label>
+                  {isGift && (
+                    <textarea value={giftMsg} onChange={(e) => setGiftMsg(e.target.value)} placeholder="Write a note for the recipient…" rows={2} aria-label="Gift message" />
+                  )}
+                  {isGift && giftMsg.trim() && <p className="fine">Your note: “{giftMsg.trim()}”</p>}
+                </div>
               </>
             )}
           </aside>
+        </div>
+      )}
+
+      {cartCount > 0 && (
+        <button type="button" className="float-bag" onClick={() => setCartOpen(true)} aria-label={`Open your bag, ${cartCount} items, total ${inr(subtotal - discount)}`}>
+          🛍 BAG ({cartCount}) · {inr(subtotal - discount)}
+        </button>
+      )}
+      {showTop && (
+        <button type="button" className="back-top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="Back to top">↑</button>
+      )}
+      {toast && (
+        <div className="toast" role="status">✓ {toast}</div>
+      )}
+      {quickView && (
+        <div className="modal-backdrop" onClick={() => setQuickView(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Quick view ${quickView.name}`}>
+            <button type="button" className="modal-close" onClick={() => setQuickView(null)} aria-label="Close quick view">✕</button>
+            <div className="modal-image"><ProductImage product={quickView} /></div>
+            <div className="modal-body">
+              <h3>{quickView.name}</h3>
+              <p className="desc">{quickView.desc}</p>
+              {quickView.rating ? <p className="rating">★ {quickView.rating} ({quickView.reviews})</p> : <p className="rating muted">0 Reviews</p>}
+              {quickView.bought && <p className="bought">{quickView.bought} bought in last 30 days</p>}
+              <p className="price">{quickView.fromPrice ? 'From ' : ''}{inr(quickView.price)}{quickView.mrp && <s>{inr(quickView.mrp)}</s>}</p>
+              <div className="qty modal-qty">
+                <button type="button" onClick={() => setQuickQty((q) => Math.max(1, q - 1))} aria-label="Decrease quantity">−</button>
+                <span>{quickQty}</span>
+                <button type="button" onClick={() => setQuickQty((q) => q + 1)} aria-label="Increase quantity">+</button>
+              </div>
+              <button type="button" className="btn-lime btn-block" onClick={() => { addToCart(quickView, quickQty); setQuickView(null) }}>Add {quickQty} to Bag · {inr(quickView.price * quickQty)}</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
