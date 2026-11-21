@@ -1,228 +1,359 @@
-import { useEffect, useMemo, useState } from 'react'
-import { PRODUCTS, NAV, GROUPS, TOTAL_PRODUCTS, PRICE_RANGE, inr } from './data/products.js'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { HERO_SLIDES, TRENDING, SHOP_BEST, CHINI_BANNER_IMAGE, SHOP_BY_LIFESTYLE, SHOP_BY_CUISINES, REVIEWS, FAQS, NAV, TABS, inr } from './data/home.js'
 
-const SORTS = [
-  'Featured', 'Best selling', 'Price, low to high', 'Price, high to low',
-  'Alphabetically, A-Z', 'Alphabetically, Z-A',
-]
+const TILE_ICONS = {
+  'KETO-FRIENDLY': '🥑', 'GUT-FRIENDLY': '🌿', 'JAIN-FRIENDLY': '🌱', 'KID FRIENDLY': '🧒',
+  'K-TOWN': '🇰🇷', 'ASIAN FUSION': '🍜', 'MIDDLE EASTERN': '🧆', 'FRENCH BISTRO': '🥐', 'INDIAN FEAST': '🍛',
+}
 
 function initials(name) {
   const words = name.replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean)
   return (words[0]?.[0] || 'U') + (words[1]?.[0] || '')
 }
 
+function CartIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 7h12l1.2 13.2a1 1 0 0 1-1 1.1H5.8a1 1 0 0 1-1-1.1L6 7z" />
+      <path d="M9 10V6a3 3 0 0 1 6 0v4" />
+    </svg>
+  )
+}
+
 function ProductImage({ product }) {
   const [failed, setFailed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
   if (failed || !product.image) return <span className="monogram">{initials(product.name)}</span>
-  return <img src={product.image} alt={product.name} loading="lazy" onError={() => setFailed(true)} />
+  return <img src={product.image} alt={product.name} loading="lazy" className={loaded ? 'loaded' : ''} onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
+}
+
+function ProductCard({ p, onAdd, onQuick, wished, onWish }) {
+  return (
+    <article className="card">
+      <div className="card-image" onClick={() => onQuick(p)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onQuick(p) }} aria-label={`Quick view ${p.name}`}>
+        <ProductImage product={p} />
+        {p.off && <span className="badge">{p.off}</span>}
+        <button type="button" className={wished ? 'wish active' : 'wish'} aria-label={wished ? `Remove ${p.name} from wishlist` : `Save ${p.name} to wishlist`} onClick={(e) => { e.stopPropagation(); onWish(p.id) }}>{wished ? '♥' : '♡'}</button>
+      </div>
+      <div className="card-body">
+        <h3>{p.name}</h3>
+        <p className="desc">{p.desc}</p>
+        {p.rating ? <p className="rating">★ {p.rating} ({p.reviews})</p> : <p className="rating muted">0 Reviews</p>}
+        {p.bought && <p className="bought">{p.bought} bought in last 30 days</p>}
+        <p className="price">{p.fromPrice ? 'From ' : ''}{inr(p.price)}{p.mrp && <s>{inr(p.mrp)}</s>}</p>
+        <button type="button" className="btn-lime btn-block" onClick={() => onAdd(p)}>
+          {p.options ? 'Choose options' : 'Add to Bag'}
+        </button>
+      </div>
+    </article>
+  )
 }
 
 export default function App() {
+  const [slide, setSlide] = useState(4)
+  const [heroFallback, setHeroFallback] = useState(false)
+  const [tab, setTab] = useState('Trending')
+  const [shopBy, setShopBy] = useState('lifestyle')
   const [query, setQuery] = useState('')
-  const [group, setGroup] = useState('All')
-  const [sort, setSort] = useState('Featured')
   const [cart, setCart] = useState({})
   const [cartOpen, setCartOpen] = useState(false)
-  const [notified, setNotified] = useState({})
-  const [email, setEmail] = useState('')
-  const [subscribed, setSubscribed] = useState(false)
+  const [openFaq, setOpenFaq] = useState(0)
+  const [teaCups, setTeaCups] = useState(3)
+  const [teaTsp, setTeaTsp] = useState(2)
+  const [juice, setJuice] = useState(0)
+  const [cola, setCola] = useState(0)
+  const [calcDone, setCalcDone] = useState(false)
+  const [scrollProgress, setScrollProgress] = useState(0)
+  const [showTop, setShowTop] = useState(false)
+  const [quickView, setQuickView] = useState(null)
+  const [quickQty, setQuickQty] = useState(1)
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
+  const [wishlist, setWishlist] = useState([])
+  const [reviewIndex, setReviewIndex] = useState(0)
+
+  useEffect(() => {
+    const t = setInterval(() => setSlide((s) => (s + 1) % HERO_SLIDES.length), 6000)
+    return () => clearInterval(t)
+  }, [])
+  useEffect(() => { setHeroFallback(false) }, [slide])
+  const [countdown, setCountdown] = useState({ h: 0, m: 0, s: 0 })
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date()
+      const end = new Date(now)
+      end.setHours(24, 0, 0, 0)
+      const diff = Math.max(0, end - now)
+      setCountdown({ h: Math.floor(diff / 3600000), m: Math.floor((diff % 3600000) / 60000), s: Math.floor((diff % 60000) / 1000) })
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [])
+  useEffect(() => {
+    const id = setInterval(() => setReviewIndex((i) => (i + 1) % REVIEWS.length), 5000)
+    return () => clearInterval(id)
+  }, [])
+  useEffect(() => {
+    const onScroll = () => {
+      const el = document.documentElement
+      const max = el.scrollHeight - el.clientHeight
+      setScrollProgress(max > 0 ? Math.min((el.scrollTop / max) * 100, 100) : 0)
+      setShowTop(el.scrollTop > 600)
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
   useEffect(() => {
     const els = document.querySelectorAll('.reveal')
     const io = new IntersectionObserver((entries) => {
       entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) } })
-    }, { threshold: 0.1 })
+    }, { threshold: 0.12 })
     els.forEach((el) => io.observe(el))
     return () => io.disconnect()
   }, [])
+  const hero = HERO_SLIDES[slide]
+  const heroSrc = heroFallback ? hero.image.replace('?format=webp&', '?') : hero.image
 
-  const filtered = useMemo(() => {
-    let list = PRODUCTS.filter((p) => {
-      const q = query.trim().toLowerCase()
-      const matchesQuery = !q || (p.name + ' ' + p.desc).toLowerCase().includes(q)
-      const matchesGroup = group === 'All' || p.group === group
-      return matchesQuery && matchesGroup
-    })
-    if (sort === 'Price, low to high') list = [...list].sort((a, b) => a.price - b.price)
-    if (sort === 'Price, high to low') list = [...list].sort((a, b) => b.price - a.price)
-    if (sort === 'Alphabetically, A-Z') list = [...list].sort((a, b) => a.name.localeCompare(b.name))
-    if (sort === 'Alphabetically, Z-A') list = [...list].sort((a, b) => b.name.localeCompare(a.name))
-    return list
-  }, [query, group, sort])
+  const allProducts = useMemo(() => [...TRENDING, ...SHOP_BEST], [])
+  const searched = query.trim()
+    ? allProducts.filter((p) => (p.name + ' ' + p.desc).toLowerCase().includes(query.trim().toLowerCase()))
+    : null
 
   const cartItems = Object.entries(cart)
-    .map(([id, qty]) => ({ product: PRODUCTS.find((p) => p.id === Number(id)), qty }))
+    .map(([id, qty]) => ({ product: allProducts.find((p) => p.id === id), qty }))
     .filter((x) => x.product)
   const cartCount = cartItems.reduce((s, x) => s + x.qty, 0)
   const subtotal = cartItems.reduce((s, x) => s + x.product.price * x.qty, 0)
   const discount = subtotal >= 2500 ? Math.round(subtotal * 0.1) : 0
-
-  function addToCart(p) {
-    setCart((c) => ({ ...c, [p.id]: (c[p.id] || 0) + 1 }))
+  function addToCart(p, qty = 1) {
+    setCart((c) => ({ ...c, [p.id]: (c[p.id] || 0) + qty }))
+    setToast(`Added ${p.name} to your bag`)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2600)
   }
+  function toggleWish(id) { setWishlist((w) => (w.includes(id) ? w.filter((x) => x !== id) : [...w, id])) }
+  function openQuick(p) { setQuickView(p); setQuickQty(1) }
   function setQty(id, qty) {
-    setCart((c) => {
-      const next = { ...c }
-      if (qty <= 0) delete next[id]
-      else next[id] = qty
-      return next
-    })
+    setCart((c) => { const n = { ...c }; if (qty <= 0) delete n[id]; else n[id] = qty; return n })
   }
+
+  // Chini Kam calculator — live page formula: 1 tsp = 4 g = 16 kcal,
+  // juice 200 ml = 5 tsp, cola 300 ml = 8 tsp
+  const tspPerDay = teaCups * teaTsp + juice * 5 + cola * 8
+  const gramsPerDay = tspPerDay * 4
+  const kcalPerDay = tspPerDay * 16
+  const kgPerYear = (gramsPerDay * 365) / 1000
+  const kcalPerYear = kcalPerDay * 365
 
   return (
     <div className="page">
-      <div className="promo">Get 10% OFF on orders above ₹2,500/-</div>
+      <div className="scroll-progress" aria-hidden="true"><div style={{ width: `${scrollProgress}%` }} /></div>
+      <div className="promo">GET 10% OFF ON ORDERS ABOVE ₹2,500/- &nbsp;·&nbsp; ENDS IN {String(countdown.h).padStart(2, '0')}:{String(countdown.m).padStart(2, '0')}:{String(countdown.s).padStart(2, '0')}</div>
 
       <header className="header">
         <div className="header-inner">
-          <div className="logo">Urban <span>Platter</span></div>
+          <div className="logo">URBAN <span>PLATTER</span></div>
           <label className="search">
             <span aria-hidden="true">⌕</span>
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search for" aria-label="Search for products" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search for products" aria-label="Search for products" />
           </label>
-          <button className="bag" onClick={() => setCartOpen(true)} type="button">
-            Bag {cartCount > 0 ? `(${cartCount})` : ''}
-          </button>
+          <span className="wish-count" title="Wishlist">♥ {wishlist.length}</span>
+          <button className="bag" onClick={() => setCartOpen(true)} type="button"><CartIcon /> Bag {cartCount > 0 && <span className="count-badge">{cartCount}</span>}</button>
         </div>
         <nav className="nav" aria-label="Primary">
-          {NAV.map((item) => (
-            <button key={item} type="button" onClick={() => {
-              const match = GROUPS.find((g) => g === item)
-              if (match) setGroup(match)
-              document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })
-            }}>{item}</button>
-          ))}
+          {NAV.map((item) => <button key={item} type="button">{item}</button>)}
         </nav>
+        <div className="nav2">
+          <span className="edamame">Edamame</span>
+          <span>About Us</span><span>HoReCa</span><span>Experiences</span><span>Partnerships</span><span>Careers</span><span>Read Blogs</span>
+        </div>
       </header>
 
+      {searched && (
+        <section className="search-results">
+          <h2>Search results for “{query}” — {searched.length} found</h2>
+          <div className="grid">{searched.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} />)}</div>
+          <button type="button" className="btn-ghost" onClick={() => setQuery('')}>Clear search</button>
+        </section>
+      )}
+
       <main>
-        <section className="hero reveal in">
-          <div className="hero-copy">
-            <p className="eyebrow">All Products &nbsp;·&nbsp; {TOTAL_PRODUCTS.toLocaleString('en-IN')} products</p>
-            <h1>Simply<br />Good Food.</h1>
-            <p className="hero-text">
-              Welcome to Urban Platter — the home of Simply Good Food. We are on a mission
-              to change the way you experience food. Great food is more than ingredients —
-              it is authentic, high-quality, and thoughtfully sourced.
-            </p>
-            <div className="hero-actions">
-              <a className="btn-primary" href="#products">Shop all products</a>
-              <span className="hero-note">10% off above ₹2,500</span>
-            </div>
-          </div>
-          <div className="hero-card" aria-hidden="true">
-            <img className="hero-image" src={PRODUCTS[0].image} alt="" onError={(e) => { e.currentTarget.style.display = 'none' }} />
-            <p className="hero-card-label">Featured</p>
-            <p className="hero-card-name">Brazil Nuts, 250g</p>
-            <p className="hero-card-desc">Rich in Selenium · Superfood · Product of Peru</p>
-            <p className="hero-card-price">{inr(925)} <s>{inr(1200)}</s> <em>23% off</em></p>
-            <p className="hero-card-rating">★ 4.7 (149 reviews)</p>
-          </div>
-        </section>
-
-        <section className="values reveal" aria-label="Why Urban Platter">
-          <div><strong>Authentic</strong><span>Thoughtfully sourced ingredients</span></div>
-          <div><strong>High-quality</strong><span>Simply Good Food, every time</span></div>
-          <div><strong>1,753 products</strong><span>Nuts, seeds, flours, snacks &amp; more</span></div>
-        </section>
-
-        <section id="products" className="collection reveal">
-          <div className="collection-head">
+        <section className="hero" aria-label="Featured">
+          <h1 className="sr-only">Urban Platter — Simply Good Food</h1>
+          <picture>
+            <source media="(max-width: 700px)" srcSet={hero.mobileImage} />
+            <img className="hero-image" key={slide} src={heroSrc} alt="" onError={() => setHeroFallback(true)} />
+          </picture>
+          <div className="hero-content">
             <div>
-              <p className="eyebrow">The Collection</p>
-              <h2>All Products</h2>
-              <p className="count">Showing {filtered.length} of {TOTAL_PRODUCTS.toLocaleString('en-IN')} products</p>
+              <p className="hero-tag">{hero.tag}</p>
+              <p className="hero-detail">{hero.detail}</p>
             </div>
-            <label className="sort">
-              Sort by
-              <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort by">
-                {SORTS.map((s) => <option key={s}>{s}</option>)}
-              </select>
-            </label>
+            <a className="btn-lime" href="#trending">{hero.cta} →</a>
           </div>
+          <div className="hero-dots">
+            {HERO_SLIDES.map((s, i) => (
+              <button key={s.tag} type="button" aria-label={`Load slide ${i + 1} of 6`} className={i === slide ? 'dot active' : 'dot'} onClick={() => setSlide(i)} />
+            ))}
+            <span className="slide-count">Slide {slide + 1} of 6</span>
+          </div>
+          <div className="hero-stats">
+            <span>✦ Free shipping above ₹500</span>
+            <span>✦ 1,753 products</span>
+            <span>✦ 10% off above ₹2,500</span>
+          </div>
+        </section>
 
-          <div className="chips" role="group" aria-label="Filter by category">
-            {GROUPS.map((g) => (
-              <button key={g} type="button" className={group === g ? 'chip active' : 'chip'} onClick={() => setGroup(g)}>
-                {g}
-              </button>
+        <div className="marquee" aria-hidden="true">
+          <div className="marquee-track">
+            <span>Free shipping above ₹500 ✦ 10% off above ₹2,500 ✦ Simply Good Food ✦ 1,753 products ✦&nbsp;</span>
+            <span>Free shipping above ₹500 ✦ 10% off above ₹2,500 ✦ Simply Good Food ✦ 1,753 products ✦&nbsp;</span>
+          </div>
+        </div>
+
+        <section id="trending" className="section reveal">
+          <p className="eyebrow">Welcome to Urban Platter</p>
+          <h2>ALL THE INGREDIENTS YOU REACH FOR — AND THE ONES YOU DISCOVER.</h2>
+          <div className="chips" role="group" aria-label="Collections">
+            {TABS.map((t) => (
+              <button key={t} type="button" className={tab === t ? 'chip active' : 'chip'} onClick={() => setTab(t)}>{t}</button>
             ))}
           </div>
-          <p className="price-range">Price: {inr(PRICE_RANGE.min)} – {inr(PRICE_RANGE.max)}</p>
-
-          {filtered.length === 0 ? (
-            <p className="empty">No products match “{query}” in {group}. Try a different search.</p>
+          {tab === 'Trending' ? (
+            <div className="grid">{TRENDING.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} />)}</div>
           ) : (
-            <div className="grid">
-              {filtered.map((p) => (
-                <article className="card" key={p.id}>
-                  <div className="card-image">
-                    <ProductImage product={p} />
-                    <span className="card-group">{p.group}</span>
-                    {p.off && <span className="badge">{p.off}</span>}
-                    {p.arrivingSoon && <span className="badge soon">Arriving soon</span>}
-                  </div>
-                  <div className="card-body">
-                    <h3>{p.name}</h3>
-                    <p className="desc">{p.desc}</p>
-                    {p.rating && <p className="rating">★ {p.rating} ({p.reviews})</p>}
-                    <p className="price">
-                      {p.fromPrice ? 'From ' : ''}{inr(p.price)}
-                      {p.mrp && <s>{inr(p.mrp)}</s>}
-                    </p>
-                    {p.arrivingSoon ? (
-                      <button type="button" className="btn-secondary" onClick={() => setNotified((n) => ({ ...n, [p.id]: true }))}>
-                        {notified[p.id] ? 'We’ll notify you ✓' : 'Notify Me'}
-                      </button>
-                    ) : (
-                      <button type="button" className="btn-primary btn-block" onClick={() => addToCart(p)}>
-                        {p.options ? 'Choose options' : 'Add to cart'}
-                      </button>
-                    )}
-                  </div>
-                </article>
-              ))}
-            </div>
+            <p className="empty">Products under “{tab}” weren’t shown on the home page on first load, so they’re not listed here — no products invented.</p>
           )}
-          <p className="source-note">
-            First 30 products in Featured order, as shown live on urbanplatter.com/collections/all on 21 Nov 2026.
-            Prices may change. The full collection has {TOTAL_PRODUCTS.toLocaleString('en-IN')} products.
-          </p>
         </section>
 
-        <section className="signup reveal">
-          <h2>Get 5% Off on your First Order</h2>
-          <p>Subscribe to our mailing list and receive 5% off your first order, plus exclusive access to new products, sales &amp; promotions.</p>
-          {subscribed ? (
-            <p className="subscribed">Thank you — you’re subscribed.</p>
-          ) : (
-            <form onSubmit={(e) => { e.preventDefault(); if (email.includes('@')) setSubscribed(true) }}>
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Your email address" aria-label="Email address" />
-              <button type="submit" className="btn-primary">Subscribe</button>
-            </form>
-          )}
+        <section className="section reveal chini">
+          <img className="chini-banner" src={CHINI_BANNER_IMAGE} alt="Chini Kam. Mithaas wahi." onError={(e) => { e.currentTarget.style.display = 'none' }} />
+          <h2>CHINI KAM. MITHAAS WAHI.</h2>
+          <p className="section-sub">That “bas 2 chammach” adds up. See how much sugar your day really holds, and what switching would change.</p>
+          <p className="chini-points">1:1 Sugar Replacement · Zero Calories · No Aftertaste · Keto &amp; Diabetic Friendly · 100% Fruit Based · No Erythritol</p>
+
+          <div className="calc">
+            <h3>CHINI KAM CALCULATOR</h3>
+            <p>Tell us what you have in a typical day. Numbers update as you go.</p>
+            <div className="calc-rows">
+              <label>Tea / Coffee — cups a day
+                <input type="number" min="0" max="10" value={teaCups} onChange={(e) => setTeaCups(Number(e.target.value) || 0)} />
+              </label>
+              <label>Tsp per cup
+                <select value={teaTsp} onChange={(e) => setTeaTsp(Number(e.target.value))}>
+                  {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n} tsp</option>)}
+                </select>
+              </label>
+              <label>Packaged Juice — 200 ml glasses a day
+                <input type="number" min="0" max="10" value={juice} onChange={(e) => setJuice(Number(e.target.value) || 0)} />
+              </label>
+              <label>Soft Drink / Cola — 300 ml a day
+                <input type="number" min="0" max="10" value={cola} onChange={(e) => setCola(Number(e.target.value) || 0)} />
+              </label>
+            </div>
+            <button type="button" className="btn-lime" onClick={() => setCalcDone(true)}>Check My Sugar</button>
+            {calcDone && (
+              <div className="calc-result">
+                <p><strong>{tspPerDay} tsp a day</strong> — {gramsPerDay} g sugar, {kcalPerDay} calories a day.</p>
+                <p>That’s about <strong>{kgPerYear.toFixed(1)} kg a year</strong> ({(kgPerYear).toFixed(0)} one-kg sugar packs) and <strong>{kcalPerYear.toLocaleString('en-IN')} calories a year</strong>.</p>
+                <p>WHO suggests about 25 g (6 tsp) of free sugars a day at most. With Monk Fruit Sweetener, same spoons a day could save up to {kcalPerYear.toLocaleString('en-IN')} kcal a year.</p>
+                <p className="fine">Estimates: 1 tsp sugar ≈ 4 g ≈ 16 kcal. Drink values are typical averages and vary by brand.</p>
+              </div>
+            )}
+            <p className="fine">Select your daily quantities, then click Check My Sugar to see your results. <a href="#trending">Shop the Monk Fruit Collection →</a></p>
+          </div>
+        </section>
+
+        <section className="banner-strip reveal">
+          <h2>SHIRATAKI</h2>
+          <p>LOW CALORIE • LOW CARB • KETO FRIENDLY</p>
+        </section>
+
+        <section className="section reveal">
+          <p className="eyebrow">Shoppable Videos</p>
+          <h2>SHOP THE BEST</h2>
+          <div className="grid grid-3">{SHOP_BEST.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} onQuick={openQuick} wished={wishlist.includes(p.id)} onWish={toggleWish} />)}</div>
+        </section>
+
+        <section className="section reveal">
+          <h2>SHOP BY</h2>
+          <div className="shopby-toggle">
+            <button type="button" className={shopBy === 'lifestyle' ? 'chip active' : 'chip'} onClick={() => setShopBy('lifestyle')}>Shop By Lifestyle and Diet</button>
+            <button type="button" className={shopBy === 'cuisines' ? 'chip active' : 'chip'} onClick={() => setShopBy('cuisines')}>Shop By Cuisines</button>
+          </div>
+          <div className="tiles">
+            {(shopBy === 'lifestyle' ? SHOP_BY_LIFESTYLE : SHOP_BY_CUISINES).map((t) => (
+              <div className="tile" key={t}><span className="tile-icon" aria-hidden="true">{TILE_ICONS[t] || '✦'}</span><span>{t}</span></div>
+            ))}
+          </div>
+        </section>
+
+        <section className="banner-strip reveal juices">
+          <h2>100% FRUIT JUICES FOR EVERYDAY WELLNESS</h2>
+          <p>Dark Cherry Juice · Blueberry Juice · Plum Juice</p>
+        </section>
+
+        <section className="section reveal">
+          <h2>MAKE EVERY GIFT SPECIAL WITH URBAN PLATTER</h2>
+          <p className="section-sub">Gifting with Urban Platter is more than just a gesture — It’s an experience of love, care, and joy wrapped in every gourmet delight. Whether for a special occasion or a simple gesture of appreciation, our curated premium products create lasting memories and bring smiles.</p>
+          <a className="btn-lime" href="#faq">Contact Us →</a>
+          <div className="gift-grid">
+            <div className="gift-card"><h3>BULK ORDERS</h3><p>Deliciously Delivered in Bulk — Perfect for Events, Celebrations…</p></div>
+            <div className="gift-card"><h3>THE ART OF GIFTING</h3><p>A personal touch for every occasion.</p></div>
+            <div className="gift-card"><h3>CORPORATE GIFTING</h3><p>Make every connection memorable — from festive cheer to milestone celebrations.</p></div>
+          </div>
+        </section>
+
+        <section className="section reveal">
+          <h2>WHAT PEOPLE SAY</h2>
+          <div className="review-carousel">
+            <blockquote className="review" key={REVIEWS[reviewIndex].name}>
+              <p className="stars">★★★★★</p>
+              <p>“{REVIEWS[reviewIndex].text}”</p>
+              <footer>{REVIEWS[reviewIndex].name} — {REVIEWS[reviewIndex].place}</footer>
+            </blockquote>
+            <div className="hero-dots review-dots">
+              {REVIEWS.map((r, i) => (
+                <button key={r.name} type="button" aria-label={`Show review ${i + 1} of ${REVIEWS.length}`} className={i === reviewIndex ? 'dot active' : 'dot'} onClick={() => setReviewIndex(i)} />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="faq" className="section reveal faq">
+          <h2>FREQUENTLY ASKED QUESTIONS</h2>
+          {FAQS.map((f, i) => (
+            <div className="faq-item" key={f.q}>
+              <button type="button" onClick={() => setOpenFaq(openFaq === i ? -1 : i)}>{f.q}<span>{openFaq === i ? '−' : '+'}</span></button>
+              {openFaq === i && <p>{f.a}</p>}
+            </div>
+          ))}
         </section>
       </main>
 
-      <footer className="footer reveal">
+      <footer className="footer">
+        <p className="footer-mission">Welcome to Urban Platter — the home of Simply Good Food! At Urban Platter, we are on a mission to change the way you experience food. We believe that great food is more than just a meal, it’s a journey, a story, and an experience that connects people, cultures, and moments. Our mission is simple: to make gourmet and healthy food products easily available and accessible for everyone. Our tagline, “Simply Good Food”, embodies everything we stand for — authentic, high-quality, and thoughtfully sourced ingredients that bring joy to every plate.</p>
         <div className="footer-grid">
-          <div>
-            <p className="logo">Urban <span>Platter</span></p>
-            <p>Simply Good Food.</p>
-            <p>YouTube · Instagram · LinkedIn</p>
-          </div>
           <div><h4>Shop</h4><p>All Products<br />New Arrivals<br />Kitchen<br />Recipes<br />Blogs<br />Events<br />Workshops</p></div>
           <div><h4>Support</h4><p>FAQs<br />Shipping<br />Returns<br />Payments<br />Orders<br />Accounts<br />Contact</p></div>
           <div><h4>About</h4><p>About Us<br />Careers<br />Stores<br />Blogs<br />Recipes</p></div>
+          <div><h4>Follow</h4><p>YouTube<br />Instagram<br />LinkedIn</p></div>
         </div>
-        <p className="fine">Payment methods accepted · © 2026 Urban Platter · Privacy Policy · Terms &amp; Conditions · Shipping Policy · Refund Policy</p>
+        <p className="fine">Payment methods accepted · © 2026 Urban Platter · Privacy Policy · Terms &amp; Conditions · Shipping Policy · Refund Policy · Free shipping on orders above Rs. 500</p>
       </footer>
 
       {cartOpen && (
         <div className="drawer-backdrop" onClick={() => setCartOpen(false)}>
           <aside className="drawer" onClick={(e) => e.stopPropagation()} aria-label="Your bag">
-            <div className="drawer-head"><h2>Your Bag</h2><button type="button" onClick={() => setCartOpen(false)}>Close ✕</button></div>
+            <div className="drawer-head"><h2><span className="cart-logo"><CartIcon size={22} /></span>YOUR BAG</h2><button type="button" onClick={() => setCartOpen(false)}>Close ✕</button></div>
             {cartItems.length === 0 ? (
-              <p>Your bag is empty. Add something good.</p>
+              <div className="cart-empty">
+                <span className="cart-logo"><CartIcon size={34} /></span>
+                <p><strong>Your bag is empty.</strong></p>
+                <p>Add something good — your favourites will wait here for you.</p>
+              </div>
             ) : (
               <>
                 {cartItems.map(({ product, qty }) => (
@@ -240,10 +371,45 @@ export default function App() {
                 <p className="total-line"><span>Subtotal</span><span>{inr(subtotal)}</span></p>
                 <p className="total-line"><span>10% off (orders above ₹2,500)</span><span>{discount ? '− ' + inr(discount) : '—'}</span></p>
                 <p className="total-line grand"><span>Total</span><span>{inr(subtotal - discount)}</span></p>
-                {subtotal < 2500 && <p className="promo-hint">Add {inr(2500 - subtotal)} more to get 10% off.</p>}
+                <p className="fine">{subtotal >= 500 ? 'Free shipping unlocked (above Rs. 500).' : `Add ${inr(500 - subtotal)} more for free shipping.`}</p>
+                <div className="ship-progress" aria-hidden="true"><div style={{ width: `${Math.min(subtotal / 500, 1) * 100}%` }} /></div>
+                <button type="button" className="btn-lime btn-block" onClick={() => setCartOpen(false)}>Proceed to Checkout →</button>
               </>
             )}
           </aside>
+        </div>
+      )}
+
+      {cartCount > 0 && (
+        <button type="button" className="float-bag" onClick={() => setCartOpen(true)} aria-label={`Open your bag, ${cartCount} items, total ${inr(subtotal - discount)}`}>
+          <CartIcon /> Bag ({cartCount}) · {inr(subtotal - discount)}
+        </button>
+      )}
+      {showTop && (
+        <button type="button" className="back-top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="Back to top">↑</button>
+      )}
+      {toast && (
+        <div className="toast" role="status">✓ {toast}</div>
+      )}
+      {quickView && (
+        <div className="modal-backdrop" onClick={() => setQuickView(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Quick view ${quickView.name}`}>
+            <button type="button" className="modal-close" onClick={() => setQuickView(null)} aria-label="Close quick view">✕</button>
+            <div className="modal-image"><ProductImage product={quickView} /></div>
+            <div className="modal-body">
+              <h3>{quickView.name}</h3>
+              <p className="desc">{quickView.desc}</p>
+              {quickView.rating ? <p className="rating">★ {quickView.rating} ({quickView.reviews})</p> : <p className="rating muted">0 Reviews</p>}
+              {quickView.bought && <p className="bought">{quickView.bought} bought in last 30 days</p>}
+              <p className="price">{quickView.fromPrice ? 'From ' : ''}{inr(quickView.price)}{quickView.mrp && <s>{inr(quickView.mrp)}</s>}</p>
+              <div className="qty modal-qty">
+                <button type="button" onClick={() => setQuickQty((q) => Math.max(1, q - 1))} aria-label="Decrease quantity">−</button>
+                <span>{quickQty}</span>
+                <button type="button" onClick={() => setQuickQty((q) => q + 1)} aria-label="Increase quantity">+</button>
+              </div>
+              <button type="button" className="btn-lime btn-block" onClick={() => { addToCart(quickView, quickQty); setQuickView(null) }}>Add {quickQty} to Bag · {inr(quickView.price * quickQty)}</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

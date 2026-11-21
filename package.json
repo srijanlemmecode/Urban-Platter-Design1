@@ -1,1 +1,23 @@
-{"dependencies":{"react":"^19.2.0","react-dom":"^19.2.0"},"description":"Urban Platter All collections page redesigned as a Minimal Premium landing page in React. Same content as https://urbanplatter.com/collections/all, new design only. Products and prices are the first 30 in Featured order as shown live on 21 Nov 2026.","devDependencies":{"@vitejs/plugin-react":"^5.0.0","vite":"^7.1.0"},"engines":{"node":">=18"},"name":"urban-platter-minimal-premium","private":true,"scripts":{"build":"vite build","dev":"vite","preview":"vite preview"},"type":"module","version":"1.0.0"}
+{
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "description": "Urban Platter home page redesigned as a Steel Blue glass landing page in React. Same content as https://urbanplatter.com/, new design only. Content fetched live 21 Nov 2026. Design 4, for branch design-4 \u2014 main, design-2 and design-3 are untouched.",
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "vite": "^7.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "name": "urban-platter-design4-steel-blue",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview"
+  },
+  "type": "module",
+  "version": "1.0.0"
+}
