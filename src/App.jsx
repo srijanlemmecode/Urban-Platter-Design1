@@ -63,7 +63,7 @@ export default function App() {
   const [juice, setJuice] = useState(0)
   const [cola, setCola] = useState(0)
   const [calcDone, setCalcDone] = useState(false)
-  const [scrollProgress, setScrollProgress] = useState(0)
+  const progressRef = useRef(null)
   const [showTop, setShowTop] = useState(false)
   const [quickView, setQuickView] = useState(null)
   const [quickQty, setQuickQty] = useState(1)
@@ -95,11 +95,18 @@ export default function App() {
     return () => clearInterval(id)
   }, [])
   useEffect(() => {
+    let ticking = false
     const onScroll = () => {
-      const el = document.documentElement
-      const max = el.scrollHeight - el.clientHeight
-      setScrollProgress(max > 0 ? Math.min((el.scrollTop / max) * 100, 100) : 0)
-      setShowTop(el.scrollTop > 600)
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        const el = document.documentElement
+        const max = el.scrollHeight - el.clientHeight
+        const pct = max > 0 ? Math.min((el.scrollTop / max) * 100, 100) : 0
+        if (progressRef.current) progressRef.current.style.width = `${pct}%`
+        setShowTop(el.scrollTop > 600)
+        ticking = false
+      })
     }
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
@@ -149,7 +156,7 @@ export default function App() {
 
   return (
     <div className="page">
-      <div className="scroll-progress" aria-hidden="true"><div style={{ width: `${scrollProgress}%` }} /></div>
+      <div className="scroll-progress" aria-hidden="true"><div ref={progressRef} /></div>
       <div className="promo">GET 10% OFF ON ORDERS ABOVE ₹2,500/- &nbsp;·&nbsp; ENDS IN {String(countdown.h).padStart(2, '0')}:{String(countdown.m).padStart(2, '0')}:{String(countdown.s).padStart(2, '0')}</div>
 
       <header className="header">

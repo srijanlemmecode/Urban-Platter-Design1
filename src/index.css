@@ -192,7 +192,7 @@ main, .search-results { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
 
 /* ---- Scroll progress bar ---- */
 .scroll-progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: rgba(255, 255, 255, 0.4); z-index: 30; }
-.scroll-progress div { height: 100%; background: linear-gradient(90deg, var(--steel-light), var(--steel)); box-shadow: 0 0 8px rgba(51, 80, 107, 0.5); transition: width .1s linear; }
+.scroll-progress div { height: 100%; width: 0; background: linear-gradient(90deg, var(--steel-light), var(--steel)); box-shadow: 0 0 8px rgba(51, 80, 107, 0.5); will-change: width; }
 
 /* ---- Premium features: quick view, toast, wishlist, floating bag, back-to-top, marquee, review carousel ---- */
 @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
