@@ -117,18 +117,18 @@ export default function App() {
             <source media="(max-width: 700px)" srcSet={hero.mobileImage} />
             <img className="hero-image" src={heroSrc} alt="" onError={() => setHeroFallback(true)} />
           </picture>
-          <div className="hero-overlay">
-            <p className="hero-tag">{hero.tag}</p>
-            <p className="hero-detail">{hero.detail}</p>
-            <div className="hero-actions">
-              <a className="btn-lime" href="#trending">{hero.cta} →</a>
-              <div className="hero-dots">
-                {HERO_SLIDES.map((s, i) => (
-                  <button key={s.tag} type="button" aria-label={`Load slide ${i + 1} of 6`} className={i === slide ? 'dot active' : 'dot'} onClick={() => setSlide(i)} />
-                ))}
-                <span className="slide-count">Slide {slide + 1} of 6</span>
-              </div>
+          <div className="hero-content">
+            <div>
+              <p className="hero-tag">{hero.tag}</p>
+              <p className="hero-detail">{hero.detail}</p>
             </div>
+            <a className="btn-lime" href="#trending">{hero.cta} →</a>
+          </div>
+          <div className="hero-dots">
+            {HERO_SLIDES.map((s, i) => (
+              <button key={s.tag} type="button" aria-label={`Load slide ${i + 1} of 6`} className={i === slide ? 'dot active' : 'dot'} onClick={() => setSlide(i)} />
+            ))}
+            <span className="slide-count">Slide {slide + 1} of 6</span>
           </div>
         </section>
 
