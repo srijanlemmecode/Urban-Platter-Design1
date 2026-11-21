@@ -35,6 +35,7 @@ function ProductCard({ p, onAdd }) {
 
 export default function App() {
   const [slide, setSlide] = useState(4)
+  const [heroFallback, setHeroFallback] = useState(false)
   const [tab, setTab] = useState('Trending')
   const [shopBy, setShopBy] = useState('lifestyle')
   const [query, setQuery] = useState('')
@@ -51,6 +52,8 @@ export default function App() {
     const t = setInterval(() => setSlide((s) => (s + 1) % HERO_SLIDES.length), 6000)
     return () => clearInterval(t)
   }, [])
+  useEffect(() => { setHeroFallback(false) }, [slide])
+  const heroSrc = heroFallback ? hero.image.replace('?format=webp&', '?') : hero.image
 
   const allProducts = useMemo(() => [...TRENDING, ...SHOP_BEST], [])
   const searched = query.trim()
@@ -110,22 +113,23 @@ export default function App() {
 
       <main>
         <section className="hero" aria-label="Featured">
+          <h1 className="sr-only">Urban Platter — Simply Good Food</h1>
           <picture>
             <source media="(max-width: 700px)" srcSet={hero.mobileImage} />
-            <img className="hero-image" src={hero.image} alt="" />
+            <img className="hero-image" src={heroSrc} alt="" onError={() => setHeroFallback(true)} />
           </picture>
-          <div className="hero-content">
-          <p className="hero-tag">{hero.tag}</p>
-          <h1>{hero.title}</h1>
-          <p className="hero-sub">{hero.sub}</p>
-          <p className="hero-detail">{hero.detail}</p>
-          <a className="btn-lime" href="#trending">{hero.cta} →</a>
-          <div className="hero-dots">
-            {HERO_SLIDES.map((s, i) => (
-              <button key={s.tag} type="button" aria-label={`Load slide ${i + 1} of 6`} className={i === slide ? 'dot active' : 'dot'} onClick={() => setSlide(i)} />
-            ))}
-            <span className="slide-count">Slide {slide + 1} of 6</span>
-          </div>
+          <div className="hero-overlay">
+            <p className="hero-tag">{hero.tag}</p>
+            <p className="hero-detail">{hero.detail}</p>
+            <div className="hero-actions">
+              <a className="btn-lime" href="#trending">{hero.cta} →</a>
+              <div className="hero-dots">
+                {HERO_SLIDES.map((s, i) => (
+                  <button key={s.tag} type="button" aria-label={`Load slide ${i + 1} of 6`} className={i === slide ? 'dot active' : 'dot'} onClick={() => setSlide(i)} />
+                ))}
+                <span className="slide-count">Slide {slide + 1} of 6</span>
+              </div>
+            </div>
           </div>
         </section>
 
