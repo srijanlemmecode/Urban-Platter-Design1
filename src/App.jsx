@@ -53,6 +53,7 @@ export default function App() {
     return () => clearInterval(t)
   }, [])
   useEffect(() => { setHeroFallback(false) }, [slide])
+  const hero = HERO_SLIDES[slide]
   const heroSrc = heroFallback ? hero.image.replace('?format=webp&', '?') : hero.image
 
   const allProducts = useMemo(() => [...TRENDING, ...SHOP_BEST], [])
@@ -78,8 +79,6 @@ export default function App() {
   const kcalPerDay = tspPerDay * 16
   const kgPerYear = (gramsPerDay * 365) / 1000
   const kcalPerYear = kcalPerDay * 365
-
-  const hero = HERO_SLIDES[slide]
 
   return (
     <div className="page">
