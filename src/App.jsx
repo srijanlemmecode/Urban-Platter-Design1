@@ -53,6 +53,14 @@ export default function App() {
     return () => clearInterval(t)
   }, [])
   useEffect(() => { setHeroFallback(false) }, [slide])
+  useEffect(() => {
+    const els = document.querySelectorAll('.reveal')
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) } })
+    }, { threshold: 0.12 })
+    els.forEach((el) => io.observe(el))
+    return () => io.disconnect()
+  }, [])
   const hero = HERO_SLIDES[slide]
   const heroSrc = heroFallback ? hero.image.replace('?format=webp&', '?') : hero.image
 
@@ -115,7 +123,7 @@ export default function App() {
           <h1 className="sr-only">Urban Platter — Simply Good Food</h1>
           <picture>
             <source media="(max-width: 700px)" srcSet={hero.mobileImage} />
-            <img className="hero-image" src={heroSrc} alt="" onError={() => setHeroFallback(true)} />
+            <img className="hero-image" key={slide} src={heroSrc} alt="" onError={() => setHeroFallback(true)} />
           </picture>
           <div className="hero-content">
             <div>
@@ -132,7 +140,7 @@ export default function App() {
           </div>
         </section>
 
-        <section id="trending" className="section">
+        <section id="trending" className="section reveal">
           <p className="eyebrow">Welcome to Urban Platter</p>
           <h2>ALL THE INGREDIENTS YOU REACH FOR — AND THE ONES YOU DISCOVER.</h2>
           <div className="chips" role="group" aria-label="Collections">
@@ -147,7 +155,7 @@ export default function App() {
           )}
         </section>
 
-        <section className="section chini">
+        <section className="section reveal chini">
           <img className="chini-banner" src={CHINI_BANNER_IMAGE} alt="Chini Kam. Mithaas wahi." onError={(e) => { e.currentTarget.style.display = 'none' }} />
           <h2>CHINI KAM. MITHAAS WAHI.</h2>
           <p className="section-sub">That “bas 2 chammach” adds up. See how much sugar your day really holds, and what switching would change.</p>
@@ -185,18 +193,18 @@ export default function App() {
           </div>
         </section>
 
-        <section className="banner-strip">
+        <section className="banner-strip reveal">
           <h2>SHIRATAKI</h2>
           <p>LOW CALORIE • LOW CARB • KETO FRIENDLY</p>
         </section>
 
-        <section className="section">
+        <section className="section reveal">
           <p className="eyebrow">Shoppable Videos</p>
           <h2>SHOP THE BEST</h2>
           <div className="grid grid-3">{SHOP_BEST.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} />)}</div>
         </section>
 
-        <section className="section">
+        <section className="section reveal">
           <h2>SHOP BY</h2>
           <div className="shopby-toggle">
             <button type="button" className={shopBy === 'lifestyle' ? 'chip active' : 'chip'} onClick={() => setShopBy('lifestyle')}>Shop By Lifestyle and Diet</button>
@@ -209,12 +217,12 @@ export default function App() {
           </div>
         </section>
 
-        <section className="banner-strip juices">
+        <section className="banner-strip reveal juices">
           <h2>100% FRUIT JUICES FOR EVERYDAY WELLNESS</h2>
           <p>Dark Cherry Juice · Blueberry Juice · Plum Juice</p>
         </section>
 
-        <section className="section">
+        <section className="section reveal">
           <h2>MAKE EVERY GIFT SPECIAL WITH URBAN PLATTER</h2>
           <p className="section-sub">Gifting with Urban Platter is more than just a gesture — It’s an experience of love, care, and joy wrapped in every gourmet delight. Whether for a special occasion or a simple gesture of appreciation, our curated premium products create lasting memories and bring smiles.</p>
           <a className="btn-lime" href="#faq">Contact Us →</a>
@@ -225,7 +233,7 @@ export default function App() {
           </div>
         </section>
 
-        <section className="section">
+        <section className="section reveal">
           <h2>WHAT PEOPLE SAY</h2>
           <div className="reviews">
             {REVIEWS.map((r) => (
@@ -238,7 +246,7 @@ export default function App() {
           </div>
         </section>
 
-        <section id="faq" className="section faq">
+        <section id="faq" className="section reveal faq">
           <h2>FREQUENTLY ASKED QUESTIONS</h2>
           {FAQS.map((f, i) => (
             <div className="faq-item" key={f.q}>
