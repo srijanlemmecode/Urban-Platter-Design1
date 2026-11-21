@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PRODUCTS, NAV, GROUPS, TOTAL_PRODUCTS, PRICE_RANGE, inr } from './data/products.js'
 
 const SORTS = [
@@ -26,6 +26,14 @@ export default function App() {
   const [notified, setNotified] = useState({})
   const [email, setEmail] = useState('')
   const [subscribed, setSubscribed] = useState(false)
+  useEffect(() => {
+    const els = document.querySelectorAll('.reveal')
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) } })
+    }, { threshold: 0.1 })
+    els.forEach((el) => io.observe(el))
+    return () => io.disconnect()
+  }, [])
 
   const filtered = useMemo(() => {
     let list = PRODUCTS.filter((p) => {
@@ -87,7 +95,7 @@ export default function App() {
       </header>
 
       <main>
-        <section className="hero">
+        <section className="hero reveal in">
           <div className="hero-copy">
             <p className="eyebrow">All Products &nbsp;·&nbsp; {TOTAL_PRODUCTS.toLocaleString('en-IN')} products</p>
             <h1>Simply<br />Good Food.</h1>
@@ -111,13 +119,13 @@ export default function App() {
           </div>
         </section>
 
-        <section className="values" aria-label="Why Urban Platter">
+        <section className="values reveal" aria-label="Why Urban Platter">
           <div><strong>Authentic</strong><span>Thoughtfully sourced ingredients</span></div>
           <div><strong>High-quality</strong><span>Simply Good Food, every time</span></div>
           <div><strong>1,753 products</strong><span>Nuts, seeds, flours, snacks &amp; more</span></div>
         </section>
 
-        <section id="products" className="collection">
+        <section id="products" className="collection reveal">
           <div className="collection-head">
             <div>
               <p className="eyebrow">The Collection</p>
@@ -181,7 +189,7 @@ export default function App() {
           </p>
         </section>
 
-        <section className="signup">
+        <section className="signup reveal">
           <h2>Get 5% Off on your First Order</h2>
           <p>Subscribe to our mailing list and receive 5% off your first order, plus exclusive access to new products, sales &amp; promotions.</p>
           {subscribed ? (
@@ -195,7 +203,7 @@ export default function App() {
         </section>
       </main>
 
-      <footer className="footer">
+      <footer className="footer reveal">
         <div className="footer-grid">
           <div>
             <p className="logo">Urban <span>Platter</span></p>
@@ -219,6 +227,7 @@ export default function App() {
               <>
                 {cartItems.map(({ product, qty }) => (
                   <div className="cart-line" key={product.id}>
+                    <div className="cart-thumb"><ProductImage product={product} /></div>
                     <div><strong>{product.name}</strong><p>{inr(product.price)} each</p></div>
                     <div className="qty">
                       <button type="button" onClick={() => setQty(product.id, qty - 1)} aria-label="Decrease quantity">−</button>
