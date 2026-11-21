@@ -11,6 +11,12 @@ function initials(name) {
   return (words[0]?.[0] || 'U') + (words[1]?.[0] || '')
 }
 
+function ProductImage({ product }) {
+  const [failed, setFailed] = useState(false)
+  if (failed || !product.image) return <span className="monogram">{initials(product.name)}</span>
+  return <img src={product.image} alt={product.name} loading="lazy" onError={() => setFailed(true)} />
+}
+
 export default function App() {
   const [query, setQuery] = useState('')
   const [group, setGroup] = useState('All')
@@ -96,6 +102,7 @@ export default function App() {
             </div>
           </div>
           <div className="hero-card" aria-hidden="true">
+            <img className="hero-image" src={PRODUCTS[0].image} alt="" onError={(e) => { e.currentTarget.style.display = 'none' }} />
             <p className="hero-card-label">Featured</p>
             <p className="hero-card-name">Brazil Nuts, 250g</p>
             <p className="hero-card-desc">Rich in Selenium · Superfood · Product of Peru</p>
@@ -141,7 +148,7 @@ export default function App() {
               {filtered.map((p) => (
                 <article className="card" key={p.id}>
                   <div className="card-image">
-                    <span className="monogram">{initials(p.name)}</span>
+                    <ProductImage product={p} />
                     <span className="card-group">{p.group}</span>
                     {p.off && <span className="badge">{p.off}</span>}
                     {p.arrivingSoon && <span className="badge soon">Arriving soon</span>}
